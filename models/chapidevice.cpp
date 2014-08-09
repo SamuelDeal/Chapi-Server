@@ -36,7 +36,7 @@ quint16 ChapiDevice::port() const {
 }
 
 int ChapiDevice::pingDelay() const {
-    return 50000;
+    return 500;
 }
 
 quint32 ChapiDevice::pingLostTolerance() const {

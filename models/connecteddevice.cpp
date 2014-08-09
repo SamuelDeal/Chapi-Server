@@ -1,6 +1,7 @@
 #include "connecteddevice.h"
 
 #include <QSettings>
+#include <QHostAddress>
 
 ConnectedDevice::ConnectedDevice(const Device &dev) :
     Device(dev), _socket(this) {
@@ -10,12 +11,8 @@ ConnectedDevice::ConnectedDevice(const Device &dev) :
     connect(&_pingTimer, SIGNAL(timeout()), this, SLOT(onPing()));
     connect(&_reconnectTimer, SIGNAL(timeout()), this, SLOT(onReconnectDelayExpired()));
 
-    if(!_ip.isEmpty()){
-        qDebug() << "constructor ip not empty";
+    if(!_ip.isEmpty() && !_lastIp.isEmpty()){
         QMetaObject::invokeMethod(this, "connectToDevice", Qt::QueuedConnection);
-    }
-    else {
-        qDebug() << "empty ip constructor";
     }
 }
 
@@ -32,7 +29,6 @@ void ConnectedDevice::setIp(const QString &ip) {
     }
     _ip = ip;
     _status = ip.isEmpty() ? Device::Unreachable : Device::Located;
-    qDebug() << "ip set to " << ip;
     if(ip != ""){
         connectToDevice();
     }
@@ -47,23 +43,19 @@ QString ConnectedDevice::lastKnownIp() const {
 }
 
 void ConnectedDevice::connectToDevice(){
-    qDebug() << "connectToDevice";
-    _lastIp = _ip;
     makeConnection();
-    setStatus(Device::Connecting);
+    setStatus(_ip.isEmpty() ? Device::Unreachable : Device::Connecting);
 }
 
 void ConnectedDevice::makeConnection(){
-    qDebug() << "starting connection " << _lastIp << " on port " << port() << " " << (quint64) this;
     _socket.close();
     _socket.abort();
     pausePing();
     _reconnectTimer.stop();
-    _socket.connectToHost(_lastIp, port());
+    _socket.connectToHost(_ip.isEmpty() ? _lastIp : _ip, port());
 }
 
 void ConnectedDevice::onReconnectDelayExpired() {
-    qDebug() << "onReconnectDelayExpired";
     makeConnection();
 }
 
@@ -72,7 +64,7 @@ void ConnectedDevice::onData() {
 }
 
 void ConnectedDevice::onError(QAbstractSocket::SocketError error) {
-    qDebug() << "error: " << error << _socket.errorString();
+    Q_UNUSED(error);
     closeCnx(true);
 }
 
@@ -99,13 +91,14 @@ void ConnectedDevice::resumePing() {
 }
 
 void ConnectedDevice::onConnected() {
+    _ip = _socket.peerAddress().toString();
+    _lastIp = _ip;
     setStatus(Device::Connected);
     resumePing();
 }
 
 void ConnectedDevice::onPing() {
     if(_pingSent > pingLostTolerance()) {
-        qDebug() << "ping failed" << _pingSent << "times, disconnect";
         closeCnx(true);
     }
     else {
@@ -116,6 +109,14 @@ void ConnectedDevice::onPing() {
 
 void ConnectedDevice::loadSpecific(QSettings &settings) {
     Device::loadSpecific(settings);
+    QString lastKnownIp = settings.value("last_ip", QVariant("")).toString();
+    if(lastKnownIp == _lastIp){
+        return;
+    }
+    _lastIp = lastKnownIp;
+    if(!_lastIp.isEmpty() && _ip.isEmpty()){
+        connectToDevice();
+    }
 }
 
 void ConnectedDevice::saveSpecific(QSettings &settings) {
