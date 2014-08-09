@@ -28,16 +28,37 @@ DeviceScanner::DeviceScanner() :
     _lastHello.invalidate();
 
     _currentMac = 0;
+    _currentMask = "255.255.255.0";
     _currentIp = "127.0.0.1";
+    QMap<NetUtils::Ipv4Class, QNetworkInterface> addresses;
     foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces()) {
-        if((netInterface.flags() & QNetworkInterface::IsLoopBack) == 0) {
-            _currentMac = NetUtils::strToMac(netInterface.hardwareAddress());
-            _currentIp = NetUtils::getIp(netInterface).toString();
-            break;
+        if(((netInterface.flags() & QNetworkInterface::IsLoopBack) == 0) && NetUtils::isValidAddress(NetUtils::getIp(netInterface))) {
+            NetUtils::Ipv4Class addrClass = NetUtils::getClass(NetUtils::getIp(netInterface));
+            if(!addresses.contains(addrClass)) {
+                addresses[addrClass] = netInterface;
+            }
         }
+    }
+    if(addresses.contains(NetUtils::ClassC)){
+        initFromInterface(addresses[NetUtils::ClassC]);
+    }
+    else if(addresses.contains(NetUtils::ClassA)){
+        initFromInterface(addresses[NetUtils::ClassC]);
+    }
+    else if(addresses.contains(NetUtils::ClassB)){
+        initFromInterface(addresses[NetUtils::ClassC]);
+    }
+    else if(!addresses.empty()) {
+        initFromInterface(addresses.first());
     }
 
     connect(&_timer, SIGNAL(timeout()), this, SLOT(sayHello()));
+}
+
+void DeviceScanner::initFromInterface(const QNetworkInterface &netInterface) {
+    _currentIp = NetUtils::getIp(netInterface).toString();
+    _currentMac = NetUtils::strToMac(netInterface.hardwareAddress());
+    _currentMask = NetUtils::getMask(netInterface).toString();
 }
 
 DeviceScanner::~DeviceScanner() {
@@ -82,9 +103,10 @@ void DeviceScanner::sayHello() {
         return; // skip hello if we just said it (to avoid hello communication loop)
     }
     QString msg = ("HELLO " DEV_CHAPI_SERVER " " CURRENT_VERSION " ") + NetUtils::macToStr(_currentMac) + " " + _currentIp + "\n";
-    qDebug() << "sending udp:\n" << msg;
     QByteArray datagram = msg.toLatin1();
-    _udpSocket.writeDatagram(datagram.data(), datagram.size(), QHostAddress::Broadcast, CHAPI_BROADCAST_PORT);
+    QHostAddress broadcastAddr = NetUtils::getBroadcast(QHostAddress(_currentIp), QHostAddress(_currentMask));
+    qDebug() << "sending udp to " << broadcastAddr.toString() << " :\n" << msg;
+    _udpSocket.writeDatagram(datagram.data(), datagram.size(), broadcastAddr, CHAPI_BROADCAST_PORT);
     _lastHello.start();
 }
 

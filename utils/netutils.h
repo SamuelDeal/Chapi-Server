@@ -22,6 +22,7 @@ public:
     static QHostAddress getNetwork(QNetworkInterface inet);
     static QHostAddress getIp(QNetworkInterface inet);
     static int getMaskPrefix(QNetworkInterface inet);
+    static QHostAddress getMask(QNetworkInterface inet);
     static Ipv4Class getClass(const QHostAddress &);
     static QHostAddress getDefaultSubmask(const QHostAddress &);
     static int ipToMaskPrefix(const QHostAddress &);
