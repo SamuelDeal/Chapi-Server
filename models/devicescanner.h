@@ -37,6 +37,7 @@ private:
     Device::DeviceType guessType(bool cfgPort, bool vhPort, bool atemPort, bool serverPort, const QString &ip);
     void parseScanResult(const QDomNode &devNode);
     void cleanProc(QProcess *proc);
+    void initFromInterface(const QNetworkInterface &);
 
     QString _nmapPath;
     QStringList _defaultPaths;
@@ -47,6 +48,7 @@ private:
     QElapsedTimer _lastHello;
     quint64 _currentMac;
     QString _currentIp;
+    QString _currentMask;
 
 signals:
     void needNmap();

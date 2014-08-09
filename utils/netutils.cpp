@@ -116,6 +116,17 @@ int NetUtils::getMaskPrefix(QNetworkInterface inet) {
     return inet.addressEntries()[i].prefixLength();
 }
 
+QHostAddress NetUtils::getMask(QNetworkInterface inet) {
+    int i = 0;
+    foreach(QNetworkAddressEntry addr,inet.addressEntries()){
+        if(addr.ip().protocol() == QAbstractSocket::IPv4Protocol){
+            break;
+        }
+        ++i;
+    }
+    return inet.addressEntries()[i].netmask();
+}
+
 NetUtils::Ipv4Class NetUtils::getClass(const QHostAddress &addr) {
     quint32 ip = addr.toIPv4Address();
     if((ip & 0xa0000000) == 0) {
