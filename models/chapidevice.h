@@ -17,7 +17,7 @@ class ChapiDevice: public ConnectedDevice
     Q_OBJECT
 
 public:
-    static const quint8 NO_SOURCE = 255;
+    static const quint16 NO_SOURCE = 65534;
 
     enum CnxStatus {
         Unreachable = 1,
@@ -33,7 +33,8 @@ public:
     bool isConfigurable() const;
     bool isConfigured() const;
     bool isIdentifiable() const;
-    quint8 nbrButtons() const;
+    virtual bool isLoggable() const;
+    quint16 nbrButtons() const;
     Device::DeviceSimpeStatus simpleStatus() const;
 
     void saveConfig(NetworkConfig &);
@@ -42,10 +43,15 @@ public:
     quint64 targetMac() const;
     QString targetIp() const;
     void setTarget(TargetableDevice *device);
-    quint8 outputIndex() const;
-    void setOutputIndex(quint8 outputIndex);
-    quint8 inputIndex(quint8 btnIndex) const;
-    void setInputIndex(quint8 btnIndex, quint8 inputIndex);
+    quint16 outputIndex(quint16 btnIndex) const;
+    void setOutputIndex(quint16 btnIndex, quint16 outputIndex);
+    quint16 inputIndex(quint16 btnIndex) const;
+    void setInputIndex(quint16 btnIndex, quint16 inputIndex);
+
+    bool isConfigurableNow() const;
+
+protected:
+    virtual QAbstractSocket *initSocket();
 
 private:
     virtual void parseInput();
@@ -57,16 +63,17 @@ private:
 
     void updateDeviceStatus();
 
+    QTcpSocket _tcpSocket;
     CnxStatus _cnxStatus;
-    quint8 _nbrBtns;
+    quint16 _nbrBtns;
     NetworkConfig _netCfg;
     bool _configSet;
     QString _targetIp;
     quint64 _targetMac;
     TargetableDevice *_target;
     DeviceList *_devList;
-    quint8 _outputIndex;
-    QMap<quint8, quint8> _inputIndexes;
+    QMap<quint16, quint16> _outputsByBtns;
+    QMap<quint16, quint16> _inputsByBtns;
     NlProtocol _protocol;
 
 signals:

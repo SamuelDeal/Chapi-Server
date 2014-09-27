@@ -98,14 +98,12 @@ void DeviceScanner::start() {
 
 
 void DeviceScanner::sayHello() {
-    qDebug() << "say hello\n";
     if(_lastHello.isValid() && _lastHello.elapsed() < 1000){
         return; // skip hello if we just said it (to avoid hello communication loop)
     }
     QString msg = ("HELLO " DEV_CHAPI_SERVER " " CURRENT_VERSION " ") + NetUtils::macToStr(_currentMac) + " " + _currentIp + "\n";
     QByteArray datagram = msg.toLatin1();
     QHostAddress broadcastAddr = NetUtils::getBroadcast(QHostAddress(_currentIp), QHostAddress(_currentMask));
-    qDebug() << "sending udp to " << broadcastAddr.toString() << " :\n" << msg;
     _udpSocket.writeDatagram(datagram.data(), datagram.size(), broadcastAddr, CHAPI_BROADCAST_PORT);
     _lastHello.start();
 }
@@ -187,8 +185,8 @@ void DeviceScanner::scan() {
         else if(!_scanners.contains(netIp)){
             QProcess *scanner = new QProcess();
             QStringList args;
-            args << "-oX" << "-" << (_networks[netIp].first.toString()+"/"+QString::number(_networks[netIp].second)) << "-p"
-                 << STRINGIFY(CHAPI_TCP_PORT) "," STRINGIFY(CHAPISERVER_TCP_PORT) "," STRINGIFY(ATEM_PORT) "," STRINGIFY(VIDEOHUB_PORT);
+            args << "-sU" << "-sS" << "-oX" << "-" << (_networks[netIp].first.toString()+"/"+QString::number(_networks[netIp].second)) <<
+                    "-p" STRINGIFY(CHAPI_TCP_PORT) "," STRINGIFY(CHAPISERVER_UDP_PORT) "," STRINGIFY(ATEM_PORT) "," STRINGIFY(VIDEOHUB_PORT);
 #ifdef Q_OS_WIN32
             QString exe = "/nmap.exe";
 #else
@@ -207,8 +205,10 @@ void DeviceScanner::scan() {
 
 
 void DeviceScanner::error(QProcess::ProcessError err){
-    Q_UNUSED(err);
+
+    //Q_UNUSED(err);
     QProcess *proc = (QProcess *)sender();
+    qDebug() << "process error :" << err << " " << proc->errorString();
 
     for (auto it = _scanners.begin(); it != _scanners.end();){
         if (it.value() == proc) {
@@ -273,6 +273,7 @@ void DeviceScanner::parseScanResult(const QDomNode &devNode) {
     bool atemPortOpened = false;
     bool cfgPortOpened = false;
     bool serverPortOpened = false;
+    bool anotherUdpOpened = false;
 
     QDomNode childNode = devNode.firstChild();
     while (!childNode.isNull()) {
@@ -303,28 +304,35 @@ void DeviceScanner::parseScanResult(const QDomNode &devNode) {
                 if(port.hasAttribute("protocol") && (port.attribute("protocol") == "udp") &&
                         port.hasAttribute("portid") && port.attribute("portid") == STRINGIFY(ATEM_PORT) && port.elementsByTagName("state").count() > 0){
                     QDomElement state = port.elementsByTagName("state").at(0).toElement();
-                    if(state.hasAttribute("state") && state.attribute("state") ==  "open"){
+                    if(state.hasAttribute("state") && state.attribute("state").contains("open")){
                         atemPortOpened = true;
+                    }
+                }
+                if(port.hasAttribute("protocol") && (port.attribute("protocol") == "udp") &&
+                        port.hasAttribute("portid") && port.attribute("portid") == STRINGIFY(CHAPI_TCP_PORT) && port.elementsByTagName("state").count() > 0){
+                    QDomElement state = port.elementsByTagName("state").at(0).toElement();
+                    if(state.hasAttribute("state") && state.attribute("state").contains("open")){
+                        anotherUdpOpened = true;
                     }
                 }
                 if(port.hasAttribute("protocol") && (port.attribute("protocol") == "tcp") &&
                         port.hasAttribute("portid") && port.attribute("portid") == STRINGIFY(VIDEOHUB_PORT) && port.elementsByTagName("state").count() > 0){
                     QDomElement state = port.elementsByTagName("state").at(0).toElement();
-                    if(state.hasAttribute("state") && state.attribute("state") ==  "open"){
+                    if(state.hasAttribute("state") && state.attribute("state").contains("open")){
                         vhPortOpened = true;
                     }
                 }
                 if(port.hasAttribute("protocol") && (port.attribute("protocol") == "tcp") &&
                         port.hasAttribute("portid") && port.attribute("portid") == STRINGIFY(CHAPI_TCP_PORT) && port.elementsByTagName("state").count() > 0){
                     QDomElement state = port.elementsByTagName("state").at(0).toElement();
-                    if(state.hasAttribute("state") && state.attribute("state") ==  "open"){
+                    if(state.hasAttribute("state") && state.attribute("state").contains("open")){
                         cfgPortOpened = true;
                     }
                 }
-                if(port.hasAttribute("protocol") && (port.attribute("protocol") == "tcp") &&
-                        port.hasAttribute("portid") && port.attribute("portid") == STRINGIFY(CHAPISERVER_TCP_PORT) && port.elementsByTagName("state").count() > 0){
+                if(port.hasAttribute("protocol") && (port.attribute("protocol") == "udp") &&
+                        port.hasAttribute("portid") && port.attribute("portid") == STRINGIFY(CHAPISERVER_UDP_PORT) && port.elementsByTagName("state").count() > 0){
                     QDomElement state = port.elementsByTagName("state").at(0).toElement();
-                    if(state.hasAttribute("state") && state.attribute("state") ==  "open"){
+                    if(state.hasAttribute("state") && state.attribute("state").contains("open")){
                         cfgPortOpened = true;
                     }
                 }
@@ -339,23 +347,23 @@ void DeviceScanner::parseScanResult(const QDomNode &devNode) {
         computer.ip = ip;
         computer.name = name;
         computer.status = Device::Located;
-        computer.type = guessType(cfgPortOpened, vhPortOpened, atemPortOpened, serverPortOpened, ip);
+        computer.type = guessType(cfgPortOpened, vhPortOpened, atemPortOpened, serverPortOpened, anotherUdpOpened, ip);
         computer.currentComputer = false;
         emit deviceDetected(computer);
     }
 }
 
-Device::DeviceType DeviceScanner::guessType(bool cfgPort, bool vhPort, bool atemPort, bool serverPort, const QString &ip) {
-    if(serverPort){
+Device::DeviceType DeviceScanner::guessType(bool cfgPort, bool vhPort, bool atemPort, bool serverPort, bool anotherUdpOpened, const QString &ip) {
+    if(serverPort && !cfgPort && !atemPort && !vhPort && !anotherUdpOpened){
         return Device::ChapiServer;
     }
-    if(cfgPort){
+    if(cfgPort && !serverPort && !atemPort && !vhPort && !anotherUdpOpened){
         return Device::ChapiDev;
     }
-    if(vhPort){
+    if(vhPort && !serverPort && !cfgPort && !atemPort && !anotherUdpOpened){
         return Device::VideoHub;
     }
-    if(atemPort) {
+    if(atemPort && !serverPort && !cfgPort && !vhPort && !anotherUdpOpened) {
         return Device::Atem;
     }
     else{
@@ -376,8 +384,6 @@ void DeviceScanner::helloReceived() {
         _udpSocket.readDatagram(data.data(), dataSize);
 
         QString msg = QString::fromLatin1(data);
-
-        qDebug() << "reading udp:\n" << msg;
 
         QString macStr;
         QString ip;

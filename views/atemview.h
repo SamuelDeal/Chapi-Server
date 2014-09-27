@@ -1,27 +1,26 @@
-#ifndef VIDEOHUBVIEW_H
-#define VIDEOHUBVIEW_H
+#ifndef ATEMVIEW_H
+#define ATEMVIEW_H
 
 #include <QMap>
 
 #include "../utils/qintegratedframe.h"
 
-class VideoHubDevice;
+class AtemDevice;
 class QClickableLabel;
 
-class VideoHubView : public QIntegratedFrame
+class AtemView : public QIntegratedFrame
 {
     Q_OBJECT
 
 public:
-    explicit VideoHubView(VideoHubDevice *dev, QWidget *parent = 0);
+    explicit AtemView(AtemDevice *dev, QWidget *parent = 0);
 
 private:
-    VideoHubDevice *_dev;
+    AtemDevice *_dev;
     QClickableLabel *_nameLabel;
 
     QString _newName;
     QMap<quint16, QString> _newInputNames;
-    QMap<quint16, QString> _newOutputNames;
 
 signals:
 
@@ -29,7 +28,6 @@ public slots:
     void onOkClicked();
     void onNameDoubleClick();
     void onInputDoubleClick();
-    void onOutputDoubleClick();
 };
 
-#endif // VIDEOHUBVIEW_H
+#endif // ATEMVIEW_H

@@ -12,6 +12,7 @@ class QScrollArea;
 class Device;
 class ChapiDevice;
 class VideoHubDevice;
+class AtemDevice;
 class QStackedLayout;
 class QBoxLayout;
 
@@ -45,7 +46,7 @@ public slots:
     void onDeviceListChanged();
     void onChapiViewAsked(ChapiDevice*);
     void onVideoHubViewAsked(VideoHubDevice*);
-    void onAtemViewAsked(Device*);
+    void onAtemViewAsked(AtemDevice*);
     void onDeviceSettingsExit();
 };
 

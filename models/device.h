@@ -49,6 +49,8 @@ public:
     Device(const Device &);
     virtual ~Device();
 
+    virtual void init();
+
     QString name() const;
     void setName(const QString &name);
     QString ip() const;
@@ -61,7 +63,8 @@ public:
     QString version() const;
     void setVersion(const QString &version);
     unsigned int index() const;
-
+    virtual bool isTargetable() const;
+    virtual bool isLoggable() const;
     virtual bool isCurrentComputer() const;
     virtual bool isMonitorable() const;
     virtual bool isMonitored() const;

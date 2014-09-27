@@ -1,4 +1,4 @@
-#include "videohubview.h"
+#include "atemview.h"
 
 #include <QVBoxLayout>
 #include <QIcon>
@@ -9,10 +9,10 @@
 #include <QScrollArea>
 #include <QFile>
 
-#include "../models/videohubdevice.h"
+#include "../models/AtemDevice.h"
 #include "../utils/qclickablelabel.h"
 
-VideoHubView::VideoHubView(VideoHubDevice *dev, QWidget *parent) :
+AtemView::AtemView(AtemDevice *dev, QWidget *parent) :
     QIntegratedFrame(parent)
 {
     _dev = dev;
@@ -26,7 +26,7 @@ VideoHubView::VideoHubView(VideoHubDevice *dev, QWidget *parent) :
     labelBox->addStretch(1);
 
     QIcon icon;
-    icon.addFile(QStringLiteral(":/icons/vh.png"), QSize(), QIcon::Normal, QIcon::Off);
+    icon.addFile(QStringLiteral(":/icons/atem.png"), QSize(), QIcon::Normal, QIcon::Off);
     QClickableLabel *clickableLabel = new QClickableLabel();
     connect(clickableLabel, SIGNAL(doubleClick()), this, SLOT(onNameDoubleClick()));
     clickableLabel->setPixmap(icon.pixmap(32, 32));
@@ -92,12 +92,12 @@ VideoHubView::VideoHubView(VideoHubDevice *dev, QWidget *parent) :
     scrollArea->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
 
     labels = _dev->getOutputs();
+    QLabel *outputLabel;
     foreach(quint16 inputIndex, labels.keys()){
-        plugLabel = new QClickableLabel();
-        plugLabel->setProperty("vh_index", inputIndex);
-        plugLabel->setText(labels[inputIndex]);
-        connect(plugLabel, SIGNAL(doubleClick()), this, SLOT(onOutputDoubleClick()));
-        plugsLayout->addWidget(plugLabel);
+        outputLabel = new QLabel();
+        outputLabel->setProperty("atem_index", inputIndex);
+        outputLabel->setText(labels[inputIndex]);
+        plugsLayout->addWidget(outputLabel);
     }
     plugsLayout->addStretch(1);
     layout->addWidget(tab, 20);
@@ -113,7 +113,7 @@ VideoHubView::VideoHubView(VideoHubDevice *dev, QWidget *parent) :
     layout->setSizeConstraint(QLayout::SetMinimumSize);
 }
 
-void VideoHubView::onNameDoubleClick() {
+void AtemView::onNameDoubleClick() {
     bool ok = true;
     QString text = QInputDialog::getText(this, tr("Renommer"),
                 tr("Nouveau Nom:"), QLineEdit::Normal, _nameLabel->text(), &ok);
@@ -123,9 +123,13 @@ void VideoHubView::onNameDoubleClick() {
     }
 }
 
-void VideoHubView::onInputDoubleClick(){
+void AtemView::onInputDoubleClick(){
     QClickableLabel *label = (QClickableLabel*) sender();
-    quint16 index = label->property("vh_index").toUInt();
+    quint16 index = label->property("atem_index").toUInt();
+    if(index > 4096) { //special input
+        return;
+    }
+
     bool ok;
     QString text = QInputDialog::getText(this, tr("Renommer l'entrée N°")+(QString::number(index+1)),
                 tr("Nouveau Nom:"), QLineEdit::Normal, label->text(), &ok);
@@ -140,33 +144,12 @@ void VideoHubView::onInputDoubleClick(){
     }
 }
 
-void VideoHubView::onOutputDoubleClick(){
-    QClickableLabel *label = (QClickableLabel*) sender();
-    bool ok;
-    quint16 index = label->property("vh_index").toUInt();
-    QString text = QInputDialog::getText(this, tr("Renommer la sortie N°")+(QString::number(index+1)),
-                tr("Nouveau Nom:"), QLineEdit::Normal, label->text(), &ok);
-    if(ok && !text.isEmpty()) {
-        if(_newOutputNames.contains(index)){
-            _newOutputNames[index] = text;
-        }
-        else{
-            _newOutputNames.insert(index, text);
-        }
-        label->setText(text);
-    }
-}
-
-
-void VideoHubView::onOkClicked() {
+void AtemView::onOkClicked() {
     if(!_newName.isEmpty()){
         _dev->setName(_newName);
     }
     foreach(quint16 index, _newInputNames.keys()){
         _dev->setInputName(index, _newInputNames[index]);
-    }
-    foreach(quint16 index, _newOutputNames.keys()){
-        _dev->setOutputName(index, _newOutputNames[index]);
     }
     emit exitDeviceSettings();
 }

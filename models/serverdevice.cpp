@@ -27,6 +27,10 @@ bool ServerDevice::isMonitorable() const {
     return !_currentComputer;
 }
 
+bool ServerDevice::isLoggable() const {
+    return true;
+}
+
 Device::DeviceSimpeStatus ServerDevice::simpleStatus() const {
     if(_currentComputer) {
         return Device::Green;

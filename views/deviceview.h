@@ -6,6 +6,7 @@
 class Device;
 class ChapiDevice;
 class VideoHubDevice;
+class AtemDevice;
 class QClickableLabel;
 class QLabel;
 class QPushButton;
@@ -22,6 +23,7 @@ public:
     qreal getColorisation();
     void setColorisation(qreal val);
 
+    void mouseDoubleClickEvent(QMouseEvent * event); //override
 
 private:
     QClickableLabel *_name;
@@ -38,7 +40,8 @@ private:
 signals:
     void chapiViewCmd(ChapiDevice*);
     void videoHubViewCmd(VideoHubDevice*);
-    void atemViewCmd(Device*);
+    void atemViewCmd(AtemDevice*);
+    void doubleClick();
 
 public slots:
     void onNameDoubleClick();

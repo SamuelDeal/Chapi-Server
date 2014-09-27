@@ -41,7 +41,17 @@ SOURCES += main.cpp\
     utils/nlprotocol.cpp \
     views/videohubview.cpp \
     utils/qintegratedframe.cpp \
-    models/targetabledevice.cpp
+    models/targetabledevice.cpp \
+    utils/atemprotocol.cpp \
+    views/outputview.cpp \
+    utils/qselectdialog.cpp \
+    views/atemview.cpp \
+    utils/qcolorizablebutton.cpp \
+    models/syslogger.cpp \
+    models/syslogentry.cpp \
+    views/syslogview.cpp \
+    models/syslogmodel.cpp \
+    utils/syslogfilter.cpp
 
 HEADERS  += \
     models/devicelist.h \
@@ -70,7 +80,18 @@ HEADERS  += \
     utils/nlprotocol.h \
     views/videohubview.h \
     utils/qintegratedframe.h \
-    models/targetabledevice.h
+    models/targetabledevice.h \
+    utils/atemprotocol.h \
+    views/outputview.h \
+    utils/qselectdialog.h \
+    views/atemview.h \
+    utils/qcolorizablebutton.h \
+    models/syslogger.h \
+    models/syslogentry.h \
+    views/syslogview.h \
+    utils/infint.h \
+    models/syslogmodel.h \
+    utils/syslogfilter.h
 
 FORMS    +=
 

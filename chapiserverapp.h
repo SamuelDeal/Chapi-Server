@@ -5,8 +5,11 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 
-#include "models/devicelist.h"
-#include "views/apptrayview.h"
+
+class AppTrayView;
+class SyslogModel;
+class DeviceList;
+class SysLogger;
 
 class ChapiServerApp : public QApplication
 {
@@ -20,12 +23,16 @@ public:
 
 private:
     void openMainWindow();
+    void openSyslogWindow();
 
     QLocalServer _localServer;
     QLocalSocket _localSocket;
     QTimer *_localCnxTimeout;
-    QWidget*_mainWindow;
+    QWidget *_mainWindow;
+    QWidget *_syslogWindow;
     DeviceList *_devList;
+    SysLogger *_syslog;
+    SyslogModel *_syslogModel;
     AppTrayView *_trayView;
 
 signals:
@@ -35,6 +42,8 @@ public slots:
     void onMainWindowShowAsked();
     void onMainWindowHideAsked();
     void onMainWindowClosed();
+    void onSyslogWindowShowAsked();
+    void onSyslogWindowClosed();
     void onLastWindowClosed();
     void onNmapNeeded();
     void onRootNeeded();

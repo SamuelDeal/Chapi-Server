@@ -2,11 +2,12 @@
 
 #include <QDebug>
 #include <QSettings>
+#include <iostream>
 
 #include "../const.h"
 
 VideoHubDevice::VideoHubDevice(const Device &dev) :
-    ConnectedDevice(dev), _protocol(&_socket) {
+    TargetableDevice(dev), _tcpSocket(this), _protocol(&_tcpSocket) {
     _blinking = false;
     connect(&_blinkTimer, SIGNAL(timeout()), this, SLOT(onBlinked()));
     connect(&_protocol, SIGNAL(onCommandFailed(NlCommand)), this, SLOT(onCommandFailed(NlCommand)));
@@ -14,6 +15,13 @@ VideoHubDevice::VideoHubDevice(const Device &dev) :
 }
 
 VideoHubDevice::~VideoHubDevice(){
+    std::cerr << "VideoHubDevice => deleting " << std::hex << (quint64)this << std::endl;
+    _tcpSocket.close();
+    _tcpSocket.abort();
+}
+
+QAbstractSocket* VideoHubDevice::initSocket() {
+    return &_tcpSocket;
 }
 
 quint16 VideoHubDevice::port() const {
@@ -40,7 +48,9 @@ bool VideoHubDevice::isIdentifiable() const {
 }
 
 bool VideoHubDevice::isConfigurableNow() const {
-    return _status == Device::Ready;
+    //FIXME Sam
+    //return _status == Device::Ready;
+    return true;
 }
 
 bool VideoHubDevice::isIdentifiableNow() const {
@@ -103,20 +113,21 @@ void VideoHubDevice::checkEndConfig() {
     }
     setStatus(Device::Ready);
 }
-QMap<quint8, QString> VideoHubDevice::outputLabels() const {
+
+QMap<quint16, QString> VideoHubDevice::getOutputs() const {
     return _outputLabels;
 }
 
 
-QMap<quint8, QString> VideoHubDevice::inputLabels() const {
+QMap<quint16, QString> VideoHubDevice::getInputs() const {
     return _inputLabels;
 }
 
-void VideoHubDevice::setInputName(quint8 index, QString name) {
+void VideoHubDevice::setInputName(quint16 index, QString name) {
     _protocol.sendCommand("INPUT LABELS", QString::number(index)+" "+name);
 }
 
-void VideoHubDevice::setOutputName(quint8 index, QString name) {
+void VideoHubDevice::setOutputName(quint16 index, QString name) {
     _protocol.sendCommand("OUTPUT LABELS", QString::number(index)+" "+name);
 }
 
@@ -129,29 +140,29 @@ void VideoHubDevice::onCommandFailed(NlCommand cmd){
 
 void VideoHubDevice::loadSpecific(QSettings &settings) {
     ConnectedDevice::loadSpecific(settings);
-    quint8 nbrInputs = settings.value("inputs", 0).toUInt();
-    quint8 nbrOutputs = settings.value("outputs", 0).toUInt();
+    quint16 nbrInputs = settings.value("inputs", 0).toUInt();
+    quint16 nbrOutputs = settings.value("outputs", 0).toUInt();
 
-    for(quint8 i = 0; i < nbrInputs; i++){
+    for(quint16 i = 0; i < nbrInputs; i++){
         _inputLabels.insert(i, settings.value("input"+QString::number(i), "input "+QString::number(i+1)).toString());
     }
-    for(quint8 i = 0; i < nbrOutputs; i++){
+    for(quint16 i = 0; i < nbrOutputs; i++){
         _outputLabels.insert(i, settings.value("output"+QString::number(i), "output "+QString::number(i+1)).toString());
     }
 }
 
 void VideoHubDevice::saveSpecific(QSettings &settings) {
     ConnectedDevice::saveSpecific(settings);
-    quint8 nbrInputs = 0;
-    foreach(quint8 index, _inputLabels.keys()){
-        nbrInputs = std::max(nbrInputs, (quint8)(index+1));
+    quint16 nbrInputs = 0;
+    foreach(quint16 index, _inputLabels.keys()){
+        nbrInputs = std::max(nbrInputs, (quint16)(index+1));
         settings.setValue("input"+QString::number(index), _inputLabels[index]);
     }
     settings.setValue("inputs", nbrInputs);
 
-    quint8 nbrOutputs = 0;
-    foreach(quint8 index, _outputLabels.keys()){
-        nbrOutputs = std::max(nbrOutputs, (quint8)(index+1));
+    quint16 nbrOutputs = 0;
+    foreach(quint16 index, _outputLabels.keys()){
+        nbrOutputs = std::max(nbrOutputs, (quint16)(index+1));
         settings.setValue("output"+QString::number(index), _outputLabels[index]);
     }
     settings.setValue("outputs", nbrOutputs);
@@ -190,7 +201,7 @@ void VideoHubDevice::onCommandReceived(NlCommand cmd){
         QRegExp regex("^([0-9]+) +(.*) *$");
         foreach(QString line, cmd.lines){
             if(regex.exactMatch(line)){
-                quint8 index = regex.cap(1).toUShort();
+                quint16 index = regex.cap(1).toUShort();
                 if(_outputLabels.contains(index)){
                     _outputLabels[index] = regex.cap(2);
                 }
@@ -209,7 +220,7 @@ void VideoHubDevice::onCommandReceived(NlCommand cmd){
         QRegExp regex("^([0-9]+) +([0-9]+) *$");
         foreach(QString line, cmd.lines){
             if(regex.exactMatch(line)){
-                quint8 output = regex.cap(1).toUShort();
+                quint16 output = regex.cap(1).toUShort();
                 if(_routingTable.contains(output)){
                     _routingTable[output] = regex.cap(2).toUShort();
                 }

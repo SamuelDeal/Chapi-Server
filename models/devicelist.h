@@ -10,6 +10,8 @@
 #include "device.h"
 #include "devicescanner.h"
 
+class TargetableDevice;
+
 class DeviceList : public QObject
 {
     Q_OBJECT
@@ -21,11 +23,14 @@ public:
     void setNmapPath(const QString &path);
     bool containsMac(quint64 mac) const;
     Device* deviceByMac(quint64 mac) const;
+    Device* currentDevice() const;
+    TargetableDevice* targetableDeviceByMac(quint64 mac) const;
     QList<Device *> devices() const;
+    QList<TargetableDevice *> getTargetableDevices() const;
 
 private:
     Device* generateDevice(const DeviceInfo &);
-
+    Device *_currentDev;
     QMap<quint64, Device*> _devices;
     QMap<quint64, bool> _previousDevScanList;
     QMap<quint64, bool> _currentDevScanList;

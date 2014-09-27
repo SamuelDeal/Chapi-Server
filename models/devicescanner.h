@@ -34,7 +34,7 @@ public:
 
 private:
     bool checkNmap(const QString &path);
-    Device::DeviceType guessType(bool cfgPort, bool vhPort, bool atemPort, bool serverPort, const QString &ip);
+    Device::DeviceType guessType(bool cfgPort, bool vhPort, bool atemPort, bool serverPort, bool anotherUdpOpened, const QString &ip);
     void parseScanResult(const QDomNode &devNode);
     void cleanProc(QProcess *proc);
     void initFromInterface(const QNetworkInterface &);

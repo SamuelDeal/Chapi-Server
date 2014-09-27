@@ -6,18 +6,21 @@
 #include <qtimer.h>
 #include <qsettings.h>
 #include <QStandardPaths>
+#include <iostream>
 
 #include "device.h"
 #include "chapidevice.h"
 #include "serverdevice.h"
 #include "videohubdevice.h"
+#include "atemdevice.h"
+#include "targetabledevice.h"
 #include "../utils/netutils.h"
 
 DeviceList::DeviceList() :
     QObject(NULL)
 {
     qRegisterMetaType<DeviceInfo>("DeviceInfo");
-
+    _currentDev = NULL;
     _thread.start();
     _scanner.moveToThread(&_thread);
     connect(&_scanner, SIGNAL(needNmap()), this, SIGNAL(needNmap()));
@@ -29,6 +32,7 @@ DeviceList::DeviceList() :
 
 DeviceList::~DeviceList() {
     foreach(Device *dev, _devices){
+        std::cerr << "devlist => deleting " << std::hex << (quint64)dev << std::endl;
         delete dev;
     }
     _thread.quit();
@@ -37,6 +41,10 @@ DeviceList::~DeviceList() {
 
 void DeviceList::scanNeedNmap() {
     emit needNmap();
+}
+
+Device* DeviceList::currentDevice() const {
+    return _currentDev;
 }
 
 void DeviceList::onDeviceDetected(DeviceInfo devInfo) {
@@ -97,16 +105,22 @@ void DeviceList::save() const{
 }
 
 Device* DeviceList::generateDevice(const DeviceInfo &devInfo) {
+    Device *result;
     switch(devInfo.type){
-        case Device::ChapiDev:          return new ChapiDevice(Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type), this);
-        case Device::ChapiServer:       return new ServerDevice(Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type), devInfo.currentComputer);
-        case Device::VideoHub:          return new VideoHubDevice(Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type));
+        case Device::ChapiDev:          result = new ChapiDevice(Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type), this); break;
+        case Device::ChapiServer:       result = new ServerDevice(Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type), devInfo.currentComputer); break;
+        case Device::VideoHub:          result = new VideoHubDevice(Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type)); break;
+        case Device::Atem:              result = new AtemDevice(Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type)); break;
 
-        case Device::Atem:
         case Device::UnknownDevice:
         default:
-            return new Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type);
+            result = new Device(devInfo.mac, devInfo.name, devInfo.ip, devInfo.status, devInfo.type); break;
     }
+    result->init();
+    if(devInfo.currentComputer){
+        _currentDev = result;
+    }
+    return result;
 }
 
 void DeviceList::load() {
@@ -144,7 +158,6 @@ void DeviceList::load() {
         }
         settings.endGroup();
     }
-
     if(changed){
         emit deviceListChanged();
     }
@@ -161,10 +174,31 @@ Device* DeviceList::deviceByMac(quint64 mac) const {
     return _devices[mac];
 }
 
+TargetableDevice* DeviceList::targetableDeviceByMac(quint64 mac) const {
+    Device* result = deviceByMac(mac);
+    if((result == NULL) || !result->isTargetable()){
+        return NULL;
+    }
+    return dynamic_cast<TargetableDevice*>(result);
+}
+
 QList<Device*> DeviceList::devices() const {
     QList<Device*> result;
     foreach(Device* dev, _devices){
         result.push_back(dev);
+    }
+    qSort(result.begin(), result.end(), [](Device *a, Device *b){
+        return a->index() > b->index();
+    });
+    return result;
+}
+
+QList<TargetableDevice *> DeviceList::getTargetableDevices() const {
+    QList<TargetableDevice*> result;
+    foreach(Device* dev, _devices){
+        if(dev->isTargetable()){
+            result.push_back(dynamic_cast<TargetableDevice*>(dev));
+        }
     }
     qSort(result.begin(), result.end(), [](Device *a, Device *b){
         return a->index() > b->index();

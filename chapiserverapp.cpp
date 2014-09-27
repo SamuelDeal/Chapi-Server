@@ -7,10 +7,14 @@
 #include <QAbstractNativeEventFilter>
 #include <functional>
 
+#include "models/devicelist.h"
+#include "models/syslogger.h"
+#include "models/syslogmodel.h"
+#include "views/apptrayview.h"
 #include "views/nmappathview.h"
 #include "views/mainview.h"
+#include "views/syslogview.h"
 #include "utils/sighandler.h"
-
 
 //TODO: rename hatuin to Chapi : Controller de Hub Audio-vidéo
 //Par Informatique
@@ -31,8 +35,6 @@ bool WindowsEventFilter::nativeEventFilter(const QByteArray &eventType, void *me
     Q_UNUSED(eventType);
     Q_UNUSED(result);
 
-    //TODO: ask on the Qt mailing list if it's not a bug
-    //TODO: check for event of kill windows
     MSG* msg = (MSG*)(message);
     if((msg->message == WM_CLOSE) && (msg->hwnd == 0)){
         ChapiServerApp *app = static_cast<ChapiServerApp*>(ChapiServerApp::instance());
@@ -49,8 +51,10 @@ ChapiServerApp::ChapiServerApp(int &argc, char **argv) :
 {
     QApplication::setApplicationName("chapi_server");
     _mainWindow = NULL;
+    _syslogWindow = NULL;
     _devList = NULL;
     _trayView = NULL;
+    _syslog = NULL;
 
     connect(&_localSocket, SIGNAL(connected()), this, SLOT(onPreviousInstanceDetected()));
     connect(&_localSocket, SIGNAL(error(QLocalSocket::LocalSocketError)), this, SLOT(onLocalSocketError(QLocalSocket::LocalSocketError)));
@@ -103,7 +107,10 @@ void ChapiServerApp::launch() {
     connect(this, SIGNAL(lastWindowClosed()), this, SLOT(onLastWindowClosed()));
     QApplication::setQuitOnLastWindowClosed(false);
 
-    _devList = new DeviceList;
+    _devList = new DeviceList();
+    _syslog = new SysLogger(_devList);
+    _syslogModel = new SyslogModel(_syslog);
+
     connect(_devList, SIGNAL(needNmap()), this, SLOT(onNmapNeeded()));
     connect(_devList, SIGNAL(needRoot()), this, SLOT(onRootNeeded()));
     _devList->load();
@@ -111,6 +118,7 @@ void ChapiServerApp::launch() {
     _trayView = new AppTrayView();
     connect(_trayView, SIGNAL(mainWindowShowCmd()), this, SLOT(onMainWindowShowAsked()));
     connect(_trayView, SIGNAL(mainWindowHideCmd()), this, SLOT(onMainWindowHideAsked()));
+    connect(_trayView, SIGNAL(syslogWindowShowCmd()), this, SLOT(onSyslogWindowShowAsked()));
     connect(_trayView, SIGNAL(aboutCmd()), this, SLOT(onAboutAsked()));
     connect(_trayView, SIGNAL(exitCmd()), this, SLOT(onExitAsked()));
 
@@ -130,6 +138,12 @@ ChapiServerApp::~ChapiServerApp() {
     if(_devList != NULL){
         _devList->save();
         delete _devList;
+    }
+    if(_syslog != NULL){
+        delete _syslog;
+    }
+    if(_syslogModel != NULL){
+        delete _syslogModel;
     }
     if(_trayView != NULL){
         delete _trayView;
@@ -155,6 +169,7 @@ void ChapiServerApp::openMainWindow() {
     }
     _mainWindow->show();
     setActiveWindow(_mainWindow);
+    _mainWindow->activateWindow();
     _mainWindow->setFocus();
     _trayView->onMainWindowVisibilityChanged(true);
 }
@@ -163,6 +178,27 @@ void ChapiServerApp::onMainWindowClosed() {
     _mainWindow = NULL;
     _trayView->onMainWindowVisibilityChanged(false);
 }
+
+void ChapiServerApp::onSyslogWindowShowAsked() {
+    openSyslogWindow();
+}
+
+void ChapiServerApp::openSyslogWindow() {
+    if(_syslogWindow == NULL){
+        _syslogWindow = new SyslogView(_syslogModel, _devList);
+        _syslogWindow->setAttribute(Qt::WA_DeleteOnClose);
+        connect(_syslogWindow, SIGNAL(destroyed()), this, SLOT(onSyslogWindowClosed()));
+    }
+    _syslogWindow->show();
+    _syslogWindow->setFocus();
+    _trayView->onSyslogWindowVisibilityChanged(true);
+}
+
+void ChapiServerApp::onSyslogWindowClosed() {
+    _syslogWindow = NULL;
+    _trayView->onSyslogWindowVisibilityChanged(false);
+}
+
 
 void ChapiServerApp::onNewLocalConnection() {
     QLocalSocket *localSocket = _localServer.nextPendingConnection();
@@ -201,11 +237,13 @@ void ChapiServerApp::onRootNeeded() {
 }
 
 void ChapiServerApp::onAboutAsked() {
-    //TODO: description du about
-    QMessageBox::about(_mainWindow, "A propos de Chapi Serveur", "Description\nsur\nplusieurs\nlignes\n<a href='http://www.google.com'>test lien</a>");
+    QMessageBox::about(_mainWindow, "A propos de Chapi Serveur", "Chapi serveur est un logiciel prévu pour configurer un Chapi.\n"
+                       "Ce logiciel développé sous license GPLv3 ou supérieur.\n"
+                       "Le code est disponible sur Github");
 }
 
 void ChapiServerApp::onExitAsked(){
+    disconnect(_trayView, SIGNAL(mainWindowHideCmd()), this, SLOT(onMainWindowHideAsked()));
     closeAllWindows();
     quit();
 }

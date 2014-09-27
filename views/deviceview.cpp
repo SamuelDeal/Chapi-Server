@@ -11,6 +11,7 @@
 #include "../models/device.h"
 #include "../models/chapidevice.h"
 #include "../models/videohubdevice.h"
+#include "../models/atemdevice.h"
 #include "../utils/qclickablelabel.h"
 #include "../utils/netutils.h"
 
@@ -20,6 +21,7 @@ DeviceView::DeviceView(Device *dev, QWidget *parent) :
     _dev = dev;
     _blinking = false;
     connect(_dev, SIGNAL(changed()), this, SLOT(onDevChanged()));
+    connect(this, SIGNAL(doubleClick()), this, SLOT(onSettingsClick()));
 
     QColor color = palette().window().color();
     setStyleSheet("QFrame {background: rgb("+QString::number(color.red())+", "+QString::number(color.green())+", "+QString::number(color.blue())+"); }");
@@ -108,6 +110,12 @@ DeviceView::DeviceView(Device *dev, QWidget *parent) :
 
     onDevChanged();
 }
+
+void DeviceView::mouseDoubleClickEvent(QMouseEvent * event){
+    QFrame::mouseDoubleClickEvent(event);
+    emit doubleClick();
+}
+
 
 void DeviceView::onNameDoubleClick() {
     if(_dev->isCurrentComputer()){
@@ -231,7 +239,7 @@ void DeviceView::onSettingsClick(){
         emit videoHubViewCmd(dynamic_cast<VideoHubDevice*>(_dev));
     }
     else if(_dev->type() == Device::Atem){
-        emit atemViewCmd(_dev);
+        emit atemViewCmd(dynamic_cast<AtemDevice*>(_dev));
     }
 }
 

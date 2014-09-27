@@ -1,11 +1,13 @@
 #include "chapidevice.h"
 
+#include <iostream>
+
 #include "../const.h"
 #include "../utils/netutils.h"
 #include "devicelist.h"
 #include "targetabledevice.h"
 
-const quint8 ChapiDevice::NO_SOURCE;
+const quint16 ChapiDevice::NO_SOURCE;
 
 bool operator==(const NetworkConfig& lhs, const NetworkConfig& rhs) {
     return lhs.useDHCP  == rhs.useDHCP &&
@@ -19,9 +21,9 @@ bool operator!=(const NetworkConfig& lhs, const NetworkConfig& rhs) {
 }
 
 ChapiDevice::ChapiDevice(const Device &dev, DeviceList *devList) :
-    ConnectedDevice(dev), _protocol(&_socket) {
+    ConnectedDevice(dev), _tcpSocket(this), _protocol(&_tcpSocket) {
     _netCfg.useDHCP = true;
-    _nbrBtns = 0;
+    _nbrBtns = 10; //FIXME debug : usualy 0
     _devList = devList;
     _target = NULL;
     connect(&_protocol, SIGNAL(onCommandReceived(NlCommand)), this, SLOT(onCommandReceived(NlCommand)));
@@ -29,6 +31,13 @@ ChapiDevice::ChapiDevice(const Device &dev, DeviceList *devList) :
 }
 
 ChapiDevice::~ChapiDevice(){
+    std::cerr << "ChapiDevice => deleting " << std::hex << (quint64)this << std::endl;
+    _tcpSocket.close();
+    _tcpSocket.abort();
+}
+
+QAbstractSocket* ChapiDevice::initSocket() {
+    return &_tcpSocket;
 }
 
 quint16 ChapiDevice::port() const {
@@ -56,6 +65,10 @@ bool ChapiDevice::isConfigured() const {
 }
 
 bool ChapiDevice::isIdentifiable() const {
+    return true;
+}
+
+bool ChapiDevice::isLoggable() const {
     return true;
 }
 
@@ -96,13 +109,15 @@ void ChapiDevice::saveConfig(NetworkConfig &netConfig) {
     _protocol.sendCommand("CONFIG_BEGIN");
     _protocol.sendCommand("TARGET_MAC", NetUtils::macToStr(_targetMac));
     _protocol.sendCommand("TARGET_IP", _targetIp);
-    _protocol.sendCommand("OUTPUTS", "0 "+QString::number(_outputIndex));
+    _protocol.sendCommand("TARGET_TYPE", _target->type() == Device::Atem ? "atem" : "vhub");
+    //FIXME
+    /*_protocol.sendCommand("OUTPUTS", "0 "+QString::number(_outputIndex));
     QStringList inputLines;
-    for(quint8 i = 0; i < nbrButtons(); i++){
+    for(quint16 i = 0; i < nbrButtons(); i++){
         inputLines.push_back(QString::number(i)+" "+QString::number(_inputIndexes[i]));
     }
     _protocol.sendCommand("INPUTS", inputLines);
-
+    */
     if(netConfig != _netCfg){
         QStringList netLines;
         netLines.push_back("dhcp "+netConfig.useDHCP ? "1" : "0");
@@ -137,7 +152,6 @@ void ChapiDevice::setTarget(TargetableDevice *device) {
 
 void ChapiDevice::onCommandReceived(NlCommand cmd){
     if(cmd.command == "PONG") {
-        qDebug() << "pong received";
         _pingSent = 0;
     }
     else if(cmd.command == "CONFIG_BEGIN"){
@@ -176,7 +190,8 @@ void ChapiDevice::onCommandReceived(NlCommand cmd){
             setTarget(dynamic_cast<TargetableDevice*>(_devList->deviceByMac(NetUtils::strToMac(cmd.lines[0]))));
         }
     }
-    else if(cmd.command == "OUTPUTS"){
+    //FIXME !!!
+    /*else if(cmd.command == "OUTPUTS"){
         QRegExp regex("^0 +([0-9]+) *$");
         foreach(QString line, cmd.lines){
             if(regex.exactMatch(line)){
@@ -186,7 +201,7 @@ void ChapiDevice::onCommandReceived(NlCommand cmd){
         }
     }
     else if(cmd.command == "INPUTS"){
-        for(quint8 i = 0; i < _nbrBtns; i++) {
+        for(quint16 i = 0; i < _nbrBtns; i++) {
             _inputIndexes[i] = NO_SOURCE;
         }
         QRegExp regex("^([0-9]+) +([0-9]+) *$");
@@ -195,7 +210,7 @@ void ChapiDevice::onCommandReceived(NlCommand cmd){
                 _inputIndexes[regex.cap(1).toUShort()] = regex.cap(2).toUShort();
             }
         }
-    }
+    }*/
     else if(cmd.command == "NETWORK") {
         QRegExp regex("^([a-z]+) +([^ ]+) *$");
         foreach(QString line, cmd.lines){
@@ -225,7 +240,7 @@ NetworkConfig ChapiDevice::networkConfig() const {
     return _netCfg;
 }
 
-quint8 ChapiDevice::nbrButtons() const {
+quint16 ChapiDevice::nbrButtons() const {
     return _nbrBtns;
 }
 
@@ -254,20 +269,44 @@ void ChapiDevice::updateDeviceStatus(){
         }
     }
 }
-quint8 ChapiDevice::outputIndex() const {
-    return _outputIndex;
+
+
+quint16 ChapiDevice::inputIndex(quint16 btnIndex) const {
+    if((btnIndex >= _nbrBtns) || !_inputsByBtns.contains(btnIndex)){
+        return NO_SOURCE;
+    }
+    return _inputsByBtns[btnIndex];
 }
 
-void ChapiDevice::setOutputIndex(quint8 outputIndex) {
-    _outputIndex = outputIndex;
+void ChapiDevice::setInputIndex(quint16 btnIndex, quint16 inputIndex) {
+    if(btnIndex >= _nbrBtns){
+        return;
+    }
+    if(_inputsByBtns.contains(btnIndex)){
+        _inputsByBtns[btnIndex] = inputIndex;
+    }
+    else{
+        _inputsByBtns.insert(btnIndex, inputIndex);
+    }
 }
 
-quint8 ChapiDevice::inputIndex(quint8 btnIndex) const {
-    return _inputIndexes[btnIndex];
+quint16 ChapiDevice::outputIndex(quint16 btnIndex) const {
+    if((btnIndex >= _nbrBtns) || !_outputsByBtns.contains(btnIndex)){
+        return NO_SOURCE;
+    }
+    return _outputsByBtns[btnIndex];
 }
 
-void ChapiDevice::setInputIndex(quint8 btnIndex, quint8 inputIndex) {
-    _inputIndexes[btnIndex] = inputIndex;
+void ChapiDevice::setOutputIndex(quint16 btnIndex, quint16 inputIndex) {
+    if(btnIndex >= _nbrBtns){
+        return;
+    }
+    if(_outputsByBtns.contains(btnIndex)){
+        _outputsByBtns[btnIndex] = inputIndex;
+    }
+    else{
+        _outputsByBtns.insert(btnIndex, inputIndex);
+    }
 }
 
 QString ChapiDevice::targetIp() const {
@@ -283,4 +322,8 @@ void ChapiDevice::onTargetChanged() {
         _targetIp = _target->lastKnownIp();
         _protocol.sendCommand("TARGET_IP", _targetIp);
     }
+}
+
+bool ChapiDevice::isConfigurableNow() const {
+    return true;
 }

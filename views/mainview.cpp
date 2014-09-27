@@ -14,6 +14,7 @@
 #include "deviceview.h"
 #include "chapiview.h"
 #include "videohubview.h"
+#include "atemview.h"
 
 MainView::MainView(DeviceList *devList, QWidget *parent) :
     QWidget(parent)
@@ -64,7 +65,7 @@ void MainView::initTabs() {
     QLabel *label = new QLabel("Aucun périphérique de ce type n'a été détecté sur le réseau.\n"
                                "\n"
                                "Veuillez vérifier vos branchements et votre configuration réseau.\n"
-                               "La détection peut prendre quelques instants (moins d'une minute)");
+                               "La détection peut prendre quelques minutes");
     label->setAlignment(Qt::AlignHCenter);
     _chapiLayout->addWidget(label);
     _chapiLayout->addStretch(2);
@@ -84,7 +85,7 @@ void MainView::initTabs() {
     label = new QLabel("Aucun périphérique de ce type n'a été détecté sur le réseau.\n"
                                "\n"
                                "Veuillez vérifier vos branchements et votre configuration réseau.\n"
-                               "La détection peut prendre quelques instants (moins d'une minute)");
+                               "La détection peut prendre quelques minutes");
     label->setAlignment(Qt::AlignHCenter);
     _vhLayout->addWidget(label);
     _vhLayout->addStretch(2);
@@ -105,7 +106,7 @@ void MainView::initTabs() {
     label = new QLabel("Aucun périphérique de ce type n'a été détecté sur le réseau.\n"
                                "\n"
                                "Veuillez vérifier vos branchements et votre configuration réseau.\n"
-                               "La détection peut prendre quelques instants (moins d'une minute)");
+                               "La détection peut prendre quelques minutes");
     label->setAlignment(Qt::AlignHCenter);
     _atemLayout->addWidget(label);
     _atemLayout->addStretch(2);
@@ -126,7 +127,7 @@ void MainView::initTabs() {
     label = new QLabel("Aucun périphérique de ce type n'a été détecté sur le réseau.\n"
                                "\n"
                                "Veuillez vérifier vos branchements et votre configuration réseau.\n"
-                               "La détection peut prendre quelques instants (moins d'une minute)");
+                               "La détection peut prendre quelques minutes");
     label->setAlignment(Qt::AlignHCenter);
     _otherLayout->addWidget(label);
     _otherLayout->addStretch(2);
@@ -204,7 +205,7 @@ void MainView::addDev(QBoxLayout *layout, Device *dev){
     DeviceView *devView = new DeviceView(dev);
     connect(devView, SIGNAL(chapiViewCmd(ChapiDevice*)), this, SLOT(onChapiViewAsked(ChapiDevice*)));
     connect(devView, SIGNAL(videoHubViewCmd(VideoHubDevice*)), this, SLOT(onVideoHubViewAsked(VideoHubDevice*)));
-    connect(devView, SIGNAL(atemViewCmd(Device*)), this, SLOT(onAtemViewAsked(Device*)));
+    connect(devView, SIGNAL(atemViewCmd(AtemDevice*)), this, SLOT(onAtemViewAsked(AtemDevice*)));
 
     layout->insertWidget(layout->count()-1, devView);
     _devViewList.insert(dev->mac(), devView);
@@ -235,14 +236,8 @@ void MainView::onChapiViewAsked(ChapiDevice *dev){
     ChapiView *view = new ChapiView(dev, _devList);
     connect(view, SIGNAL(exitDeviceSettings()), this, SLOT(onDeviceSettingsExit()));
 
-    QScrollArea* scrollArea = new QScrollArea();
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scrollArea->setWidgetResizable(true);
-
+    QWidget *content = new QWidget();
     QHBoxLayout *mainLayout = new QHBoxLayout();
-    scrollArea->setLayout(mainLayout);
-
     mainLayout->addSpacing(1);
     QVBoxLayout *subLayout = new QVBoxLayout();
     subLayout->addSpacing(1);
@@ -250,8 +245,9 @@ void MainView::onChapiViewAsked(ChapiDevice *dev){
     subLayout->addSpacing(1);
     mainLayout->addLayout(subLayout);
     mainLayout->addSpacing(1);
+    content->setLayout(mainLayout);
 
-    _stackedLayout->addWidget(scrollArea);
+    _stackedLayout->addWidget(content);
     _stackedLayout->setCurrentIndex(1);
     view->setFocus();
 }
@@ -260,14 +256,8 @@ void MainView::onVideoHubViewAsked(VideoHubDevice *dev){
     VideoHubView *view = new VideoHubView(dev);
     connect(view, SIGNAL(exitDeviceSettings()), this, SLOT(onDeviceSettingsExit()));
 
-    QScrollArea* scrollArea = new QScrollArea();
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scrollArea->setWidgetResizable(true);
-
+    QWidget *content = new QWidget();
     QHBoxLayout *mainLayout = new QHBoxLayout();
-    scrollArea->setLayout(mainLayout);
-
     mainLayout->addSpacing(1);
     QVBoxLayout *subLayout = new QVBoxLayout();
     subLayout->addSpacing(1);
@@ -275,14 +265,31 @@ void MainView::onVideoHubViewAsked(VideoHubDevice *dev){
     subLayout->addSpacing(1);
     mainLayout->addLayout(subLayout);
     mainLayout->addSpacing(1);
+    content->setLayout(mainLayout);
 
-    _stackedLayout->addWidget(scrollArea);
+    _stackedLayout->addWidget(content);
     _stackedLayout->setCurrentIndex(1);
     view->setFocus();
 }
 
-void MainView::onAtemViewAsked(Device *dev){
+void MainView::onAtemViewAsked(AtemDevice *dev){
+    AtemView *view = new AtemView(dev);
+    connect(view, SIGNAL(exitDeviceSettings()), this, SLOT(onDeviceSettingsExit()));
 
+    QWidget *content = new QWidget();
+    QHBoxLayout *mainLayout = new QHBoxLayout();
+    mainLayout->addSpacing(1);
+    QVBoxLayout *subLayout = new QVBoxLayout();
+    subLayout->addSpacing(1);
+    subLayout->addWidget(view);
+    subLayout->addSpacing(1);
+    mainLayout->addLayout(subLayout);
+    mainLayout->addSpacing(1);
+    content->setLayout(mainLayout);
+
+    _stackedLayout->addWidget(content);
+    _stackedLayout->setCurrentIndex(1);
+    view->setFocus();
 }
 
 void MainView::onDeviceSettingsExit() {

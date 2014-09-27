@@ -2,25 +2,30 @@
 
 #include <QSettings>
 #include <QHostAddress>
+#include <iostream>
 
 ConnectedDevice::ConnectedDevice(const Device &dev) :
-    Device(dev), _socket(this) {
-    connect(&_socket, SIGNAL(readyRead()), this, SLOT(onData()));
-    connect(&_socket, SIGNAL(connected()), this, SLOT(onConnected()));
-    connect(&_socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onError(QAbstractSocket::SocketError)));
-    connect(&_pingTimer, SIGNAL(timeout()), this, SLOT(onPing()));
-    connect(&_reconnectTimer, SIGNAL(timeout()), this, SLOT(onReconnectDelayExpired()));
-
-    if(!_ip.isEmpty() && !_lastIp.isEmpty()){
-        QMetaObject::invokeMethod(this, "connectToDevice", Qt::QueuedConnection);
-    }
+    Device(dev) {
+    _socket = NULL;
 }
 
 ConnectedDevice::~ConnectedDevice(){
-    _socket.close();
-    _socket.abort();
+    std::cerr << "ConnectedDevice => deleting " << std::hex << (quint64)this << std::endl;
     _reconnectTimer.stop();
     pausePing();
+    std::cerr << "ConnectedDevice Finished => deleting " << std::hex << (quint64)this << std::endl;
+}
+
+void ConnectedDevice::init() {
+    _socket = initSocket();
+    connect(_socket, SIGNAL(readyRead()), this, SLOT(onData()));
+    connect(_socket, SIGNAL(connected()), this, SLOT(onConnected()));
+    connect(_socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onError(QAbstractSocket::SocketError)));
+    connect(&_pingTimer, SIGNAL(timeout()), this, SLOT(onPing()));
+    connect(&_reconnectTimer, SIGNAL(timeout()), this, SLOT(onReconnectDelayExpired()));
+    if(!_ip.isEmpty() || !_lastIp.isEmpty()){
+        connectToDevice();
+    }
 }
 
 void ConnectedDevice::setIp(const QString &ip) {
@@ -29,7 +34,7 @@ void ConnectedDevice::setIp(const QString &ip) {
     }
     _ip = ip;
     _status = ip.isEmpty() ? Device::Unreachable : Device::Located;
-    if(ip != ""){
+    if(!ip.isEmpty()){
         connectToDevice();
     }
     if(!ip.isEmpty()){
@@ -48,11 +53,12 @@ void ConnectedDevice::connectToDevice(){
 }
 
 void ConnectedDevice::makeConnection(){
-    _socket.close();
-    _socket.abort();
+    _socket->close();
+    _socket->abort();
     pausePing();
     _reconnectTimer.stop();
-    _socket.connectToHost(_ip.isEmpty() ? _lastIp : _ip, port());
+    qDebug() << "connecting to : " << (_ip.isEmpty() ? _lastIp : _ip);
+    _socket->connectToHost(_ip.isEmpty() ? _lastIp : _ip, port());
 }
 
 void ConnectedDevice::onReconnectDelayExpired() {
@@ -64,15 +70,16 @@ void ConnectedDevice::onData() {
 }
 
 void ConnectedDevice::onError(QAbstractSocket::SocketError error) {
-    Q_UNUSED(error);
+    //Q_UNUSED(error);
+    qDebug() << "cnx error: " << error << " " << _socket->errorString();
     closeCnx(true);
 }
 
 void ConnectedDevice::closeCnx(bool reconnect) {
     _reconnectTimer.stop();
     pausePing();
-    _socket.close();
-    _socket.abort();
+    _socket->close();
+    _socket->abort();
     setStatus(Device::Unreachable);
     if(reconnect){
         _reconnectTimer.setSingleShot(true);
@@ -87,14 +94,21 @@ void ConnectedDevice::pausePing() {
 
 void ConnectedDevice::resumePing() {
     _pingSent = 0;
-    _pingTimer.start(pingDelay());
+    if(pingDelay() > 0){
+        _pingTimer.start(pingDelay());
+    }
 }
 
 void ConnectedDevice::onConnected() {
-    _ip = _socket.peerAddress().toString();
+    _ip = _socket->peerAddress().toString();
     _lastIp = _ip;
     setStatus(Device::Connected);
     resumePing();
+    onCnxEstablished();
+}
+
+void ConnectedDevice::onCnxEstablished() {
+
 }
 
 void ConnectedDevice::onPing() {

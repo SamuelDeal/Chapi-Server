@@ -15,6 +15,7 @@ class ConnectedDevice : public Device
 public:
     ConnectedDevice(const Device &dev);
     virtual ~ConnectedDevice();
+    virtual void init();
     virtual void setIp(const QString &ip);
     QString lastKnownIp() const;
 
@@ -25,6 +26,7 @@ public:
     virtual void saveSpecific(QSettings &settings);
 
 protected:
+    virtual QAbstractSocket *initSocket() = 0;
     virtual void parseInput() = 0;
     virtual void ping() = 0;
     virtual quint16 port() const = 0;
@@ -35,8 +37,9 @@ protected:
     void parseLine(const QString &line);
     void makeConnection();
     void closeCnx(bool reconnect);
+    virtual void onCnxEstablished();
 
-    QTcpSocket _socket;
+    QAbstractSocket *_socket;
     QString _lastIp;
     QTimer _reconnectTimer;
     QTimer _pingTimer;

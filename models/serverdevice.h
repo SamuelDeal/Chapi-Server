@@ -14,6 +14,7 @@ public:
     DeviceSimpeStatus simpleStatus() const;
 
     virtual void setIp(const QString &ip);
+    virtual bool isLoggable() const;
     bool isMonitorable() const;
     bool isIdentifiable() const;
 

@@ -10,30 +10,35 @@
 #include <QGroupBox>
 #include <QFormLayout>
 #include <QSignalMapper>
+#include <QScrollArea>
+#include <QPropertyAnimation>
 
 #include "networksettingsview.h"
+#include "outputview.h"
 #include "../utils/qclickablelabel.h"
+#include "../utils/qselectdialog.h"
+#include "../utils/qcolorizablebutton.h"
 #include "../models/device.h"
 #include "../models/devicelist.h"
 #include "../models/chapidevice.h"
 #include "../models/videohubdevice.h"
 #include "../models/atemdevice.h"
 
+
 ChapiView::ChapiView(ChapiDevice *dev, DeviceList *devList, QWidget *parent) :
     QIntegratedFrame(parent), _netCfg(dev->networkConfig())
 {
     _dev = dev;
+    _target = NULL;
     connect(_dev, SIGNAL(changed()), this, SLOT(onCheckOk()));
 
     _devList = devList;
     connect(_devList, SIGNAL(deviceListChanged()), this, SLOT(onDeviceListChanged()));
 
-    _previousMacAddress = 0;
+    setMaximumWidth(450);
 
     QVBoxLayout *layout = new QVBoxLayout();
     setLayout(layout);
-
-    setMaximumWidth(450);
 
     QHBoxLayout *labelBox = new QHBoxLayout();
     labelBox->addStretch(1);
@@ -59,41 +64,75 @@ ChapiView::ChapiView(ChapiDevice *dev, DeviceList *devList, QWidget *parent) :
 
     QIcon icon2;
     icon2.addFile(QStringLiteral(":/icons/network.png"), QSize(), QIcon::Normal, QIcon::Off);
-    QPushButton *networkButton = new QPushButton(icon2, tr("réseau"));
-    networkButton->setIconSize(QSize(24, 24));
+    _networkButton = new QColorizableButton(icon2, tr("réseau"));
+    _networkButton->setIconSize(QSize(24, 24));
 
-    layout->addWidget(networkButton);
-    connect(networkButton, SIGNAL(clicked()), this, SLOT(onNetworkBtnClicked()));
-
-    _targetBox = new QComboBox();
-    layout->addWidget(_targetBox);
-
-    connect(_targetBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onTargetSelected(int)));
-    onDeviceListChanged();
-
-    _outputBox = new QComboBox();
-    layout->addWidget(_outputBox);
-    _outputBox->setVisible(false);
-
-    _inputsBox = new QGroupBox("Sources: ");
-    layout->addWidget(_inputsBox);
-    _inputsBox->setVisible(false);
-
-    _inputsLayout = new QFormLayout();
-    _inputsBox->setLayout(_inputsLayout);
-
-    for(int i = 0; i < _dev->nbrButtons(); i++) {
-        _inputsLayout->addWidget(new QLabel("Bouton "+QString::number(i+1)+":"));
-        QComboBox *inputBtnBox = new QComboBox();
-        _inputsLayout->addWidget(inputBtnBox);
-        _inputBoxes.append(inputBtnBox);
-        connect(inputBtnBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onCheckOk()));
+    _networkButtonAnim = NULL;
+    if(!_dev->isConfigured()){
+        _networkButtonAnim = new QPropertyAnimation(_networkButton, "colorisation");
+        _networkButtonAnim->setDuration(1000);
+        _networkButtonAnim->setLoopCount(-1);
+        _networkButtonAnim->setStartValue(0.0);
+        _networkButtonAnim->setEndValue(0.5);
+        _networkButtonAnim->setEasingCurve(QEasingCurve::CosineCurve);
+        _networkButtonAnim->start();
     }
 
+    layout->addWidget(_networkButton);
+    connect(_networkButton, SIGNAL(clicked()), this, SLOT(onNetworkBtnClicked()));
 
-    connect(_outputBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onCheckOk()));
+    QFormLayout *formLayout = new QFormLayout();
+    _targetBox = new QComboBox();
+    formLayout->addRow(tr("&Cible:"), _targetBox);
+    layout->addLayout(formLayout);
 
-    layout->addStretch(2);
+    _tabs = new QTabWidget(this);
+    _tabs->setIconSize(QSize(24, 24));
+    QFile styleFile(":/styles/tabs.qss");
+    styleFile.open(QFile::ReadOnly );
+    QString style(styleFile.readAll() );
+    _tabs->setStyleSheet(style);
+
+    QScrollArea* scrollArea = new QScrollArea();
+    QWidget *content = new QWidget();
+    _outputLayout = new QVBoxLayout();
+    content->setLayout(_outputLayout);
+    content->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
+    QIcon iconOutput;
+    iconOutput.addFile(QStringLiteral(":/icons/output.png"), QSize(), QIcon::Normal, QIcon::Off);
+    _tabs->addTab(scrollArea, iconOutput, tr("Sorties"));
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setWidget(content);
+
+    QIcon iconAdd;
+    iconAdd.addFile(QStringLiteral(":/icons/add.png"), QSize(), QIcon::Normal, QIcon::Off);
+    _addOutputBtn = new QPushButton(iconAdd, "Ajouter une sortie");
+    _addOutputBtn->setMinimumHeight(30);
+    _addOutputBtn->setMaximumWidth(200);
+    connect(_addOutputBtn, SIGNAL(clicked()), this, SLOT(onAddBtnClicked()));
+    _outputLayout->addStretch(1);
+    _outputLayout->addWidget(_addOutputBtn);
+
+    scrollArea = new QScrollArea();
+    content = new QWidget();
+    _inputLayout = new QVBoxLayout();
+    content->setLayout(_inputLayout);
+    content->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
+    QIcon iconInput;
+    iconInput.addFile(QStringLiteral(":/icons/input.png"), QSize(), QIcon::Normal, QIcon::Off);
+    _tabs->addTab(scrollArea, iconInput, tr("Entrées"));
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setWidget(content);
+
+
+    _tabs->setVisible(false);
+    _tabs->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
+    layout->addWidget(_tabs, 800);
+    layout->addStretch(50);
 
     QDialogButtonBox *btnBox = new QDialogButtonBox();
     QPushButton *restartBtn = btnBox->addButton("Redémarer", QDialogButtonBox::ActionRole);
@@ -104,14 +143,282 @@ ChapiView::ChapiView(ChapiDevice *dev, DeviceList *devList, QWidget *parent) :
     connect(_okBtn, SIGNAL(clicked()), this, SLOT(onOkClicked()));
     layout->addWidget(btnBox);
     setFocus();
-    layout->setSizeConstraint(QLayout::SetFixedSize);
+    layout->setSizeConstraint(QLayout::SetMinimumSize);
 
     _networkSet = dev->isConfigured();
+    onDeviceListChanged();
     onCheckOk();
+}
+
+ChapiView::~ChapiView() {
+    if(_networkButtonAnim != NULL){
+        delete _networkButtonAnim;
+    }
+}
+
+QMap<quint16, QString> ChapiView::getUnusedOutputs() const {
+    if(_target == NULL){
+        return QMap<quint16, QString>();
+    }
+
+    QMap<quint16, QString> outputsAll = _target->getOutputs();
+    qDebug() << "targets outputs:";
+    foreach(quint16 outputIndex, outputsAll.keys()){
+        qDebug() << outputIndex;
+    }
+    qDebug() << "outputs by btn:";
+    foreach(quint16 btnIndex, _outputsByBtns.keys()){
+        qDebug() << btnIndex << ":" << _outputsByBtns[btnIndex];
+    }
+
+    foreach(quint16 outputIndex, _outputsByBtns){
+        if(outputIndex != ChapiDevice::NO_SOURCE){
+            outputsAll.remove(outputIndex);
+        }
+    }
+    qDebug() << "unused outputs:";
+    foreach(quint16 btnIndex, outputsAll.keys()){
+        qDebug() << btnIndex << ":" << outputsAll[btnIndex];
+    }
+    return outputsAll;
+}
+
+void ChapiView::onAddBtnClicked() {
+    QMap<quint16, QString> outputs = getUnusedOutputs();
+
+    QMap<QVariant, QString> values;
+    foreach(quint16 index, outputs.keys()) {
+        values.insert(QVariant(index), outputs[index]);
+    }
+
+    QList<QVariant> selection = QSelectDialog::select("Ajout d'une sortie", "Choisissez la sortie", values, QList<QVariant>(), false, this);
+    if(selection.isEmpty()){
+        return;
+    }
+    quint16 index = selection.first().toUInt();
+
+
+    QMap<QVariant, QString> availablesButtons;
+    for(quint16 i = 0; i < _dev->nbrButtons(); i++){
+        if(!_outputsByBtns.contains(i)){
+            availablesButtons.insert(QVariant(i), "Bouton "+QString::number(i+1));
+        }
+    }
+    QList<QVariant> newSelectionVar = QSelectDialog::select("Configuration de la sortie",
+                "Choisissez les boutons assignés à la sortie "+outputs[index],
+                availablesButtons,  QList<QVariant>(), true, this);
+
+    if(newSelectionVar.isEmpty()){
+        return;
+    }
+
+    QList<quint16> newSelection;
+    foreach(QVariant var, newSelectionVar){
+        newSelection.push_back(var.toUInt());
+    }
+
+    foreach(QVariant btnIndex, newSelectionVar){
+        _outputsByBtns.insert(btnIndex.toUInt(), index);
+    }
+
+    bool foundFreeBtn = false;
+    for(quint16 i = 0; i < _dev->nbrButtons(); i++){
+        if(!_outputsByBtns.contains(i)){
+            foundFreeBtn = true;
+            break;
+        }
+    }
+    _addOutputBtn->setEnabled(foundFreeBtn);
+
+    OutputView *outView = new OutputView(index, outputs[index]);
+    connect(outView, SIGNAL(outputRemove(quint16)), this, SLOT(onOutputRemoved(quint16)));
+    connect(outView, SIGNAL(outputSettings(quint16)), this, SLOT(onOutputSettings(quint16)));
+    _outputLayout->insertWidget(_outputLayout->count() -2, outView);
+    updateInputs();
+    onCheckOk();
+}
+
+void ChapiView::updateInputs(){
+    while(_inputLayout->count() > 0){
+        delete(_inputLayout->takeAt(0)->widget());
+    }
+    if(_target == NULL){
+        return;
+    }
+
+    QMap<quint16, QString> outputs = _target->getOutputs();
+    int nbrOutputGroups = _outputLayout->count()-2;
+    for(int outputGroupIndex = 0; outputGroupIndex < nbrOutputGroups; outputGroupIndex++){
+        quint16 outputIndex = dynamic_cast<OutputView*>(_outputLayout->itemAt(outputGroupIndex)->widget())->index();
+        QGroupBox *group = new QGroupBox(outputs[outputIndex]);
+        group->setProperty("outputIndex", QVariant(outputIndex));
+        QFormLayout *layout = new QFormLayout();
+        for(quint16 currentBtnIndex = 0; currentBtnIndex < _dev->nbrButtons(); currentBtnIndex++){
+            if(!_outputsByBtns.contains(currentBtnIndex) || _outputsByBtns[currentBtnIndex] != outputIndex){
+                continue;
+            }
+            QComboBox *inputCombo = new QComboBox();
+            layout->addRow(new QLabel("Bouton "+QString::number(currentBtnIndex+1)+":"), inputCombo);
+            inputCombo->setProperty("btnIndex", QVariant(currentBtnIndex));
+        }
+        group->setLayout(layout);
+        _inputLayout->addWidget(group);
+        updateInputGroup(group);
+    }
+    _inputLayout->addStretch(1);
+
+    QList<quint16> unusedBtns;
+    for(quint16 i = 0; i < _dev->nbrButtons(); i++){
+        if(!_outputsByBtns.contains(i)){
+            unusedBtns.push_back(i);
+        }
+    }
+    if(unusedBtns.empty()){
+        return;
+    }
+    QGroupBox *group = new QGroupBox("Boutons non-utilisés:");
+    QVBoxLayout *layout = new QVBoxLayout();
+    foreach(quint16 index, unusedBtns){
+        layout->addWidget(new QLabel("Bouton "+QString::number(index+1)));
+        if(_inputsByBtns.contains(index)){
+            _inputsByBtns.remove(index);
+        }
+    }
+    group->setLayout(layout);
+    _inputLayout->addWidget(group);
+}
+
+void ChapiView::onBtnInputSelected(int index) {
+    Q_UNUSED(index);
+    QComboBox *inputCombo = ((QComboBox*)sender());
+    quint16 btnIndex = inputCombo->property("btnIndex").toUInt();
+    qint32 inputIndex = inputCombo->currentData().toInt();
+    if(inputIndex < 0){
+        _inputsByBtns.remove(btnIndex);
+    }
+    else{
+        _inputsByBtns[btnIndex] = inputIndex;
+    }
+    updateInputGroup((QGroupBox*)(inputCombo->parentWidget()));
+}
+
+void ChapiView::updateInputGroup(QGroupBox *group) {
+    QLayout *layout = group->layout();
+    quint16 outputIndex = group->property("outputIndex").toUInt();
+    for(int i = 0; i < layout->count(); i++){
+        QComboBox *inputCombo = dynamic_cast<QComboBox*>(layout->itemAt(i)->widget());
+        if(inputCombo == NULL){
+            continue;
+        }
+        disconnect(inputCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onBtnInputSelected(int)));
+        quint16 currentBtnIndex = inputCombo->property("btnIndex").toUInt();
+        inputCombo->clear();
+        QMap<quint16, QString> input = _target->getInputs();
+        foreach(quint16 btnIndex, _inputsByBtns.keys()){
+            if((btnIndex != currentBtnIndex) && _outputsByBtns.contains(btnIndex) && (_outputsByBtns[btnIndex] == outputIndex)){
+                input.remove(_inputsByBtns[btnIndex]);
+            }
+        }
+
+        inputCombo->addItem("Aucune source", QVariant((qint32)ChapiDevice::NO_SOURCE));
+        foreach(quint16 index, input.keys()){
+            inputCombo->addItem(input[index], QVariant((qint32)index));
+        }
+        inputCombo->insertItem(0, "Sélectionnez une entrée", QVariant((qint32)-2));
+        if(_inputsByBtns.contains(currentBtnIndex)){
+            inputCombo->setCurrentIndex(inputCombo->findData(QVariant((qint32)_inputsByBtns[currentBtnIndex])));
+        }
+        else {
+            inputCombo->setCurrentIndex(0);
+        }
+        qobject_cast<QStandardItemModel *>(inputCombo->model())->item(0)->setEnabled(false);
+        connect(inputCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onBtnInputSelected(int)));
+    }
+}
+
+
+void ChapiView::onOutputRemoved(quint16 index){
+    for(int i = 0; i < _outputLayout->count() -2; i++){
+        OutputView *outView = dynamic_cast<OutputView*>(_outputLayout->itemAt(i)->widget());
+        if(outView->index() == index){
+            _outputLayout->removeWidget(outView);
+            delete outView;
+        }
+    }
+
+    bool foundFreeBtn = false;
+    for(quint16 i = 0; i < _dev->nbrButtons(); i++){
+        if(_outputsByBtns.contains(i)){
+            if(_outputsByBtns[i] == index){
+                _outputsByBtns.remove(i);
+                foundFreeBtn = true;
+            }
+        }
+        else {
+            foundFreeBtn = true;
+        }
+    }
+    _addOutputBtn->setEnabled(foundFreeBtn);
+    _outputLayout->parentWidget()->updateGeometry();
+    _outputLayout->parentWidget()->parentWidget()->updateGeometry();
+    updateInputs();
+    onCheckOk();
+}
+
+void ChapiView::onOutputSettings(quint16 ouputIndex){
+    if(_target == NULL){
+        return;
+    }
+    QMap<quint16, QString> outputs = _target->getOutputs();
+
+    QList<QVariant> selectedButtons;
+    QMap<QVariant, QString> availablesButtons;
+    for(quint16 btnIndex = 0; btnIndex < _dev->nbrButtons(); btnIndex++){
+        if(_outputsByBtns.contains(btnIndex)){
+            if(_outputsByBtns[btnIndex] != ouputIndex){
+                continue;
+            }
+            selectedButtons.push_back(QVariant(btnIndex));
+        }
+        availablesButtons.insert(QVariant(btnIndex), "Bouton "+QString::number(btnIndex+1));
+    }
+    QList<QVariant> newSelectionVar = QSelectDialog::select("Configuration de la sortie",
+                "Choisissez les boutons assignés à la sortie "+outputs[ouputIndex],
+                availablesButtons, selectedButtons, true, this);
+
+    if(newSelectionVar.isEmpty()){
+        return;
+    }
+
+    QList<quint16> newSelection;
+    foreach(QVariant var, newSelectionVar){
+        newSelection.push_back(var.toUInt());
+    }
+
+    bool foundFreeBtn = false;
+    for(quint16 btnIndex = 0; btnIndex < _dev->nbrButtons(); btnIndex++){
+        if(_outputsByBtns.contains(btnIndex)){
+                if((_outputsByBtns[btnIndex] == ouputIndex) && !newSelection.contains(btnIndex)){
+                    _outputsByBtns.remove(btnIndex);
+                    foundFreeBtn = true;
+                }
+        }
+        else {
+            if(newSelection.contains(btnIndex)){
+                _outputsByBtns.insert(btnIndex, ouputIndex);
+            }
+            else{
+                foundFreeBtn = true;
+            }
+        }
+    }
+    _addOutputBtn->setEnabled(foundFreeBtn);
+    updateInputs();
 }
 
 void ChapiView::onDeviceListChanged() {
     disconnect(_targetBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onTargetSelected(int)));
+
     quint64 mac = _targetBox->currentData().toULongLong();
     _targetBox->clear();
 
@@ -134,94 +441,98 @@ void ChapiView::onDeviceListChanged() {
     _targetBox->insertItem(0, "Vidéohubs:", QVariant(0));
     qobject_cast<QStandardItemModel *>(_targetBox->model())->item(0)->setEnabled(false);
     _targetBox->insertItem(0, "Sélectionnez la cible", QVariant(0));
-    connect(_targetBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onTargetSelected(int)));
-    if(mac == 0) {
-        _targetBox->setCurrentIndex(0);
-    }
-    else {
+
+    TargetableDevice *originalDevice = _dev->targetMac() == 0 ? NULL : _devList->targetableDeviceByMac(mac);
+    if(mac != 0) {
         _targetBox->setCurrentIndex(_targetBox->findData(QVariant(mac)));
     }
+    else {
+        if((_target == NULL) && (originalDevice != NULL)){
+            int devIndex = _targetBox->findData(_dev->targetMac());
+            _targetBox->setCurrentIndex(devIndex);
+            onTargetSelected(devIndex);
+        }
+        else{
+            _targetBox->setCurrentIndex(0);
+            onTargetSelected(0);
+        }
+    }
     qobject_cast<QStandardItemModel *>(_targetBox->model())->item(0)->setEnabled(false);
+    connect(_targetBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onTargetSelected(int)));
 }
 
 void ChapiView::onTargetSelected(int index) {
+    _tabs->setVisible(false);
+    _okBtn->setEnabled(false);
+    _outputsByBtns.clear();
+    _inputsByBtns.clear();
     if(index == 0) {
         return;
     }
     quint64 mac = _targetBox->itemData(index).toULongLong();
-    if((mac == 0) || (mac == _previousMacAddress)){
+    if(mac == 0){
         return;
     }
-    QIcon icon;
-    icon.addFile(QStringLiteral(":/icons/output.png"), QSize(), QIcon::Normal, QIcon::Off);
-
-    QIcon icon2;
-    icon2.addFile(QStringLiteral(":/icons/input.png"), QSize(), QIcon::Normal, QIcon::Off);
-
-    Device* devTarget = _devList->deviceByMac(mac);
-    if(devTarget->type() == Device::VideoHub) {
-        VideoHubDevice *target = dynamic_cast<VideoHubDevice*>(devTarget);
-        QMap<quint8, QString> outputLabels = target->outputLabels();
-        foreach(quint8 index, outputLabels.keys()){
-            _outputBox->addItem(icon, outputLabels[index], QVariant(index));
+    TargetableDevice *newTarget = _devList->targetableDeviceByMac(mac);
+    if(newTarget == NULL){
+        return;
+    }
+    if(_target == newTarget){
+        return;
+    }
+    _target = newTarget;
+    quint16 nbrBtns = _dev->nbrButtons();
+    QList<quint16> seenOutputs;
+    for(quint16 i = 0; i < nbrBtns; i++){
+        if(_dev->inputIndex(i) != ChapiDevice::NO_SOURCE) {
+            _inputsByBtns.insert(i, _dev->inputIndex(i));
         }
-
-        QMap<quint8, QString> inputLabels = target->inputLabels();
-        quint8 btnIndex = 0;
-        foreach(QComboBox *inputBox, _inputBoxes){
-            inputBox->clear();
-            inputBox->addItem("Aucune source", QVariant((qint32)ChapiDevice::NO_SOURCE));
-            foreach(quint8 index, inputLabels.keys()){
-                inputBox->addItem(icon2, inputLabels[index], QVariant((qint32)index));
+        if(_dev->outputIndex(i) != ChapiDevice::NO_SOURCE) {
+            _outputsByBtns.insert(i, _dev->outputIndex(i));
+            if(!seenOutputs.contains(_dev->outputIndex(i))){
+                seenOutputs.push_back(_dev->outputIndex(i));
             }
-            inputBox->insertItem(0, "Sélectionnez la source", QVariant((qint32)-2));
-            if(mac == _dev->targetMac()){
-                inputBox->setCurrentIndex(inputBox->findData(QVariant(_dev->inputIndex(btnIndex))));
-            }
-            else {
-                inputBox->setCurrentIndex(0);
-            }
-            ++btnIndex;
-            qobject_cast<QStandardItemModel *>(inputBox->model())->item(0)->setEnabled(false);
         }
     }
 
-    _previousMacAddress = mac;
-    _outputBox->insertItem(0, "Sélectionnez la sortie", QVariant((qint32)-2));
-    if(mac == _dev->targetMac()){
-        _outputBox->setCurrentIndex(_outputBox->findData(_dev->outputIndex()));
+    QMap<quint16, QString> outputsNames = _target->getOutputs();
+    foreach(quint16 outputIndex, seenOutputs){
+        qDebug() << outputIndex;
+        OutputView *outView = new OutputView(outputIndex, outputsNames[outputIndex]);
+        connect(outView, SIGNAL(outputRemove(quint16)), this, SLOT(onOutputRemoved(quint16)));
+        connect(outView, SIGNAL(outputSettings(quint16)), this, SLOT(onOutputSettings(quint16)));
+        _outputLayout->insertWidget(_outputLayout->count() -2, outView);
     }
-    else {
-        _outputBox->setCurrentIndex(0);
-    }
-    qobject_cast<QStandardItemModel *>(_outputBox->model())->item(0)->setEnabled(false);
-    _outputBox->setVisible(true);
-    _inputsBox->setVisible(true);
+    _tabs->setVisible(true);
+    _addOutputBtn->setEnabled(getUnusedOutputs().size() > 0);
+    updateInputs();
+    onCheckOk();
 }
 
 void ChapiView::onCheckOk(int unused) {
     Q_UNUSED(unused);
+    _okBtn->setEnabled(false);
     if(!_networkSet){
-        _okBtn->setEnabled(false);
+        return;
     }
-    else if(!_dev->isConfigurableNow()){
-        _okBtn->setEnabled(false);
+    if(!_dev->isConfigurableNow()){
+        return;
     }
-    else if(_targetBox->currentData().toULongLong() == 0){
-        _okBtn->setEnabled(false);
+    if(_target == NULL){
+        return;
     }
-    else if(_outputBox->currentData().toInt() < 0){
-        _okBtn->setEnabled(false);
+    if(_outputLayout->count() < 3){
+        return;
     }
-    else {
-        foreach(QComboBox *inputBox, _inputBoxes){
-            if(inputBox->currentData().toInt() < 0){
-                _okBtn->setEnabled(false);
-                return;
-            }
+    //FIXME
+    /*foreach(QComboBox *inputBox, _inputBoxes){
+        if(inputBox->currentData().toInt() < 0){
+            _okBtn->setEnabled(false);
+            return;
         }
-        _okBtn->setEnabled(true);
-    }
+    }*/
+
+    _okBtn->setEnabled(true);
 }
 
 void ChapiView::onNetworkBtnClicked() {
@@ -229,6 +540,12 @@ void ChapiView::onNetworkBtnClicked() {
     int result = net.exec();
     if(result == QDialog::Accepted) {
         _networkSet = true;
+        if(_networkButtonAnim != NULL){
+            _networkButtonAnim->stop();
+            delete _networkButtonAnim;
+            _networkButtonAnim = NULL;
+            _networkButton->setColorisation(0);
+        }
     }
 }
 
@@ -248,7 +565,7 @@ void ChapiView::onRestartClicked() {
 }
 
 void ChapiView::onOkClicked() {
-    if(!_newName.isEmpty()){
+    /*if(!_newName.isEmpty()){
         _dev->setName(_newName);
     }
     quint64 targetMac = _targetBox->itemData(_targetBox->currentIndex()).toULongLong();
@@ -259,5 +576,5 @@ void ChapiView::onOkClicked() {
         _dev->setInputIndex(btnIndex++, inputBox->itemData(inputBox->currentIndex()).toInt());
     }
     _dev->saveConfig(_netCfg);
-    emit exitDeviceSettings();
+    emit exitDeviceSettings();*/
 }

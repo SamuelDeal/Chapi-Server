@@ -3,10 +3,12 @@
 
 #include <QTimer>
 
-#include "connecteddevice.h"
+#include "targetabledevice.h"
 #include "../utils/nlprotocol.h"
 
-class VideoHubDevice :  public ConnectedDevice
+class QAbstractSocket;
+
+class VideoHubDevice :  public TargetableDevice
 {
     Q_OBJECT
 
@@ -21,16 +23,18 @@ public:
     virtual bool isIdentifiableNow() const;
     virtual void blink();
 
-    QMap<quint8, QString> inputLabels() const;
-    QMap<quint8, QString> outputLabels() const;
+    virtual QMap<quint16, QString> getInputs() const;
+    virtual QMap<quint16, QString> getOutputs() const;
 
-    void setInputName(quint8 index, QString name);
-    void setOutputName(quint8 index, QString name);
+    void setInputName(quint16 index, QString name);
+    void setOutputName(quint16 index, QString name);
 
     virtual void loadSpecific(QSettings &settings);
     virtual void saveSpecific(QSettings &settings);
 
 protected:
+    virtual QAbstractSocket* initSocket();
+
     virtual void parseInput();
     virtual void ping();
     virtual quint16 port() const;
@@ -40,10 +44,11 @@ protected:
 
     void checkEndConfig();
 
-    QMap<quint8, QString> _inputLabels;
-    QMap<quint8, QString> _outputLabels;
-    QMap<quint8, quint8> _routingTable;
+    QMap<quint16, QString> _inputLabels;
+    QMap<quint16, QString> _outputLabels;
+    QMap<quint16, quint8> _routingTable;
 
+    QTcpSocket _tcpSocket;
     bool _blinking;
     QTimer _blinkTimer;
     NlProtocol _protocol;

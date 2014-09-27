@@ -1,6 +1,7 @@
 #include "device.h"
 
 #include <QSettings>
+#include <iostream>
 
 #include "../utils/netutils.h"
 #include "atemdevice.h"
@@ -47,6 +48,10 @@ Device::Device(const Device &dev) : QObject(NULL) {
 }
 
 Device::~Device() {
+    std::cerr << "Device => deleting " << std::hex << (quint64)this << std::endl;
+}
+
+void Device::init() {
 }
 
 quint64 Device::mac() const {
@@ -121,6 +126,14 @@ bool Device::isConfigurable() const {
 
 bool Device::isIdentifiable() const {
     return false;
+}
+
+bool Device::isTargetable() const {
+    return false;
+}
+
+bool Device::isLoggable() const {
+    return true;
 }
 
 bool Device::isConfigurableNow() const {

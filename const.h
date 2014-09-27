@@ -7,7 +7,7 @@
 
 #define CHAPI_TCP_PORT              13013
 #define CHAPI_BROADCAST_PORT        13014
-#define CHAPISERVER_TCP_PORT        13015
+#define CHAPISERVER_UDP_PORT        13016
 
 #define VIDEOHUB_PORT               9990
 #define ATEM_PORT                   9910
