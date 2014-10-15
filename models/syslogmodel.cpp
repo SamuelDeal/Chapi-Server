@@ -1,5 +1,7 @@
 #include "syslogmodel.h"
 
+#include <QFont>
+
 #include "syslogger.h"
 #include "device.h"
 
@@ -19,6 +21,9 @@ int SyslogModel::columnCount(const QModelIndex &parent) const{
 }
 
 QVariant SyslogModel::data(const QModelIndex &index, int role) const {
+    if(index.isValid() && role==Qt::FontRole) {
+        return QFont("Courier New", 8);
+    }
     if(!index.isValid() || (role != Qt::DisplayRole) || (index.row() < 0) || (index.row() >= _entries.length())){
         return QVariant();
     }

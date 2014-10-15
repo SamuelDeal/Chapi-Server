@@ -12,6 +12,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QSortFilterProxyModel>
+#include <QHeaderView>
 
 #include "../models/syslogentry.h"
 #include "../models/syslogger.h"
@@ -46,8 +47,22 @@ SyslogView::SyslogView(SyslogModel *syslogModel, DeviceList *devList) :
     _view->setSortingEnabled(true);
     _view->setSelectionBehavior(QAbstractItemView::SelectRows);
     _view->horizontalHeader()->setSortIndicatorShown(true);
+    _view->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    _view->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    _view->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    _view->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    _view->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     _view->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
+    _view->sortByColumn(2, Qt::AscendingOrder);
     _view->verticalHeader()->hide();
+    _view->setShowGrid(false);
+    _view->verticalHeader()->setDefaultSectionSize(_view->verticalHeader()->defaultSectionSize()*0.7);
+
+    /*
+    _view->setAlternatingRowColors(true);
+    _view->setStyleSheet("QTableView{alternate-background-color: #EDF1F2; background-color: white;}");
+    */
+    _view->setStyleSheet("QTableView{color: white; background-color: black;} QTableView::item:selected {color:black; background-color: white}");
 
     _severityFilterModel = new QStandardItemModel();
     QStringList severities{"Urgence", "Alerte", "Critique", "Erreur", "Warning", "Information", "Détail", "Debug"};
@@ -138,6 +153,9 @@ SyslogView::SyslogView(SyslogModel *syslogModel, DeviceList *devList) :
 
     mainLayout->addWidget(_view, 1);
     setLayout(mainLayout);
+
+    QTimer::singleShot(500, this, SLOT(onStart()));
+
 }
 
 void SyslogView::closeEvent(QCloseEvent *event) {
@@ -158,4 +176,8 @@ void SyslogView::closeEvent(QCloseEvent *event) {
 SyslogView::~SyslogView() {
     delete _deviceFilterModel;
     delete _severityFilterModel;
+}
+
+void SyslogView::onStart() {
+
 }

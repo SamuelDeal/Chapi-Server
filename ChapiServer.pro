@@ -12,9 +12,11 @@ TARGET = ChapiServer
 TEMPLATE = app
 RC_FILE = chapi.rc
 QMAKE_CXXFLAGS += -std=c++11 -Wall -Wextra -pedantic
-CONFIG += static
 TRANSLATIONS = qt_fr.qm
-win32:LIBS += -liphlpapi
+win32:LIBS += -liphlpapi -lwinsparkle
+
+INCLUDEPATH += $$PWD/../WinSparkle-0.4/include
+LIBS += -L"$$PWD/../WinSparkle-0.4/Release"
 
 SOURCES += main.cpp\
     models/devicelist.cpp \

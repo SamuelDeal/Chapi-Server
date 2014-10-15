@@ -27,7 +27,7 @@ private:
 signals:
 
 public slots:
-
+    void onStart();
 };
 
 #endif // SYSLOGVIEW_H

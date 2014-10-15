@@ -1,6 +1,6 @@
 #include "chapiserverapp.h"
 
-#include <qlocalsocket.h>
+#include <QLocalSocket>
 #include <QTranslator>
 #include <QLibraryInfo>
 #include <QAbstractEventDispatcher>
@@ -27,6 +27,7 @@
 //TODO check for translations :Qt bug?
 
 #ifdef _WIN32
+
 class WindowsEventFilter : public QAbstractNativeEventFilter {
     bool nativeEventFilter(const QByteArray &eventType, void *message, long *result);
 };
@@ -46,6 +47,8 @@ bool WindowsEventFilter::nativeEventFilter(const QByteArray &eventType, void *me
 }
 #endif // _WIN32
 
+bool ChapiServerApp::_quitting = false;
+
 ChapiServerApp::ChapiServerApp(int &argc, char **argv) :
     QApplication(argc, argv), _localServer(this), _localSocket(this)
 {
@@ -55,15 +58,33 @@ ChapiServerApp::ChapiServerApp(int &argc, char **argv) :
     _devList = NULL;
     _trayView = NULL;
     _syslog = NULL;
+    _syslogModel = NULL;
 
     connect(&_localSocket, SIGNAL(connected()), this, SLOT(onPreviousInstanceDetected()));
     connect(&_localSocket, SIGNAL(error(QLocalSocket::LocalSocketError)), this, SLOT(onLocalSocketError(QLocalSocket::LocalSocketError)));
     _localCnxTimeout = new QTimer(this);
     connect(_localCnxTimeout, SIGNAL(timeout()), this, SLOT(onLocalSocketTimeout()));
-    _localCnxTimeout->start(1000);
+    _localCnxTimeout->start(500);
     _localSocket.connectToServer("__chapi_server");
 
     setWindowIcon(QIcon(":/icons/chapi.png"));
+
+}
+
+ChapiServerApp::~ChapiServerApp() {
+    if(_devList != NULL){
+        _devList->save();
+        delete _devList;
+    }
+    if(_syslog != NULL){
+        delete _syslog;
+    }
+    if(_syslogModel != NULL){
+        delete _syslogModel;
+    }
+    if(_trayView != NULL){
+        delete _trayView;
+    }
 }
 
 void ChapiServerApp::onPreviousInstanceDetected() {
@@ -71,7 +92,12 @@ void ChapiServerApp::onPreviousInstanceDetected() {
     _localSocket.write("PING\n");
     _localSocket.flush();
     _localSocket.close();
+    _quitting = true;
     quit();
+}
+
+bool ChapiServerApp::isQuitting() const {
+    return _quitting;
 }
 
 void ChapiServerApp::onLocalSocketTimeout() {
@@ -134,21 +160,7 @@ void ChapiServerApp::launch() {
     openMainWindow();
 }
 
-ChapiServerApp::~ChapiServerApp() {
-    if(_devList != NULL){
-        _devList->save();
-        delete _devList;
-    }
-    if(_syslog != NULL){
-        delete _syslog;
-    }
-    if(_syslogModel != NULL){
-        delete _syslogModel;
-    }
-    if(_trayView != NULL){
-        delete _trayView;
-    }
-}
+
 
 void ChapiServerApp::onMainWindowShowAsked() {
     openMainWindow();
@@ -243,7 +255,9 @@ void ChapiServerApp::onAboutAsked() {
 }
 
 void ChapiServerApp::onExitAsked(){
-    disconnect(_trayView, SIGNAL(mainWindowHideCmd()), this, SLOT(onMainWindowHideAsked()));
+    if(_trayView != NULL) {
+        disconnect(_trayView, SIGNAL(mainWindowHideCmd()), this, SLOT(onMainWindowHideAsked()));
+    }
     closeAllWindows();
     quit();
 }

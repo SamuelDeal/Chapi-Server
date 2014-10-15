@@ -67,64 +67,44 @@ quint64 NetUtils::strToMac(const QString &str){
 }
 
 QHostAddress NetUtils::getNetwork(QNetworkInterface inet) {
-    int i = 0;
-    bool found = false;
-    foreach(QNetworkAddressEntry addr,inet.addressEntries()){
+    QList<QNetworkAddressEntry> entries = inet.addressEntries();
+    foreach(QNetworkAddressEntry addr, entries){
         if(addr.ip().protocol() == QAbstractSocket::IPv4Protocol){
-            found = true;
-            break;
+            qint32 netip = addr.ip().toIPv4Address() & addr.netmask().toIPv4Address();
+            return QHostAddress(netip);
         }
-        ++i;
     }
-
-    if(found){
-        qint32 netip = inet.addressEntries()[i].ip().toIPv4Address() & inet.addressEntries()[i].netmask().toIPv4Address();
-        return QHostAddress(netip);
-    }
-    else{
-        return QHostAddress();
-    }
+    return QHostAddress();
 }
 
 QHostAddress NetUtils::getIp(QNetworkInterface inet){
-    int i = 0;
-    bool found = false;
-    foreach(QNetworkAddressEntry addr,inet.addressEntries()){
+    QList<QNetworkAddressEntry> entries = inet.addressEntries();
+    foreach(QNetworkAddressEntry addr, entries){
         if(addr.ip().protocol() == QAbstractSocket::IPv4Protocol){
-            found = true;
-            break;
+            return addr.ip();
         }
-        ++i;
     }
-
-    if(found){
-        return inet.addressEntries()[i].ip();
-    }
-    else{
-        return QHostAddress();
-    }
+    return QHostAddress();
 }
 
 int NetUtils::getMaskPrefix(QNetworkInterface inet) {
-    int i = 0;
-    foreach(QNetworkAddressEntry addr,inet.addressEntries()){
+    QList<QNetworkAddressEntry> entries = inet.addressEntries();
+    foreach(QNetworkAddressEntry addr, entries){
         if(addr.ip().protocol() == QAbstractSocket::IPv4Protocol){
-            break;
+            return addr.prefixLength();
         }
-        ++i;
     }
-    return inet.addressEntries()[i].prefixLength();
+    return -1;
 }
 
 QHostAddress NetUtils::getMask(QNetworkInterface inet) {
-    int i = 0;
-    foreach(QNetworkAddressEntry addr,inet.addressEntries()){
+    QList<QNetworkAddressEntry> entries = inet.addressEntries();
+    foreach(QNetworkAddressEntry addr, entries){
         if(addr.ip().protocol() == QAbstractSocket::IPv4Protocol){
-            break;
+            addr.netmask();
         }
-        ++i;
     }
-    return inet.addressEntries()[i].netmask();
+    return QHostAddress();
 }
 
 NetUtils::Ipv4Class NetUtils::getClass(const QHostAddress &addr) {

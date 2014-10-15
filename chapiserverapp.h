@@ -20,8 +20,11 @@ public:
 
     void start();
     void launch();
+    bool isQuitting() const;
 
 private:
+    static bool _quitting;
+
     void openMainWindow();
     void openSyslogWindow();
 
