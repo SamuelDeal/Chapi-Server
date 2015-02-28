@@ -1,0 +1,29 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>imgs/add.png</file>
+        <file>imgs/atem.png</file>
+        <file>imgs/blink.png</file>
+        <file>imgs/chapi.png</file>
+        <file>imgs/computer.png</file>
+        <file>imgs/green.png</file>
+        <file>imgs/input.png</file>
+        <file>imgs/monitor.png</file>
+        <file>imgs/network.png</file>
+        <file>imgs/other.png</file>
+        <file>imgs/output.png</file>
+        <file>imgs/red.png</file>
+        <file>imgs/remove.png</file>
+        <file>imgs/router.png</file>
+        <file>imgs/server.png</file>
+        <file>imgs/settings.png</file>
+        <file>imgs/vh.png</file>
+        <file>imgs/yellow.png</file>
+        <file>imgs/slider.png</file>
+    </qresource>
+    <qresource prefix="/styles">
+        <file>tabs.qss</file>
+    </qresource>
+    <qresource prefix="/i18n">
+        <file>qt_fr.qm</file>
+    </qresource>
+</RCC>
